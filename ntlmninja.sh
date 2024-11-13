@@ -1,5 +1,17 @@
 #!/bin/bash
 
+# =============================================================
+# ntlmninja.sh - SMB Relay Attack Automation Script
+# -------------------------------------------------------------
+# This script automates the setup and execution of an SMB relay
+# attack using tools like Responder, Impacket's ntlmrelayx,
+# crackmapexec, and tmux. It scans a list of target IPs for
+# misconfigured SMB signing, and if vulnerabilities are found,
+# it initiates a relay attack within a tmux session.
+#
+# Author: Howell King Jr. | Github: https://github.com/sp3ttr0
+# =============================================================
+
 responder_config_file="/etc/responder/Responder.conf"
 session_name="smb_relay_attack"
 window1="responder"
