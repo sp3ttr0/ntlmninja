@@ -1,36 +1,47 @@
 # ntlmninja
 
-This script automates the setup and execution of an SMB relay attack using tools like responder, impacket-ntlmrelayx, crackmapexec, and tmux. It streamlines the process of identifying misconfigured SMB signing on target machines and launching a relay attack against vulnerable hosts.
+This script automates the setup and execution of an SMB relay attack using tools like Responder, Impacket's ntlmrelayx, CrackMapExec, and tmux. It identifies misconfigured SMB signing on target machines and launches a relay attack against vulnerable hosts.
 
 ## Prerequisites
 
-Ensure the following tools are installed:
-- tmux
-- responder
-- impacket
-- crackmapexec
+Ensure the following tools are installed and accessible in your system's PATH:
+tmux
+Responder
+Impacket
+CrackMapExec
 
-Install them if they are not available in your environment.
+Install these tools as needed before using the script.
 
 ## Usage:
 ```bash
-./smb_relay_attack.sh [-f TARGET_FILE] [-h]
+./ntlmninja.sh [-f TARGET_FILE] [-i NETWORK_INTERFACE] [-h]
 ```
 
 ## Options
 ```
 -f TARGET_FILE: Specifies the file containing a list of target IP addresses to scan for misconfigured SMB signing.
--h: Displays this help message and exits.
+-i NETWORK_INTERFACE: Specifies the network interface to use for the attack (default: eth0).
+-h: Displays the help message and exits.
 ```
 
 ## Example
 ```bash
-./smb_relay_attack.sh -f targets.txt
+./ntlmninja.sh -f targets.txt
 ```
 
 ## Important Notes
-- The script is configured to run responder on the eth0 interface by default. Modify this setting in the script if a different network interface is needed.
-- Use responsibly and only on networks and devices you have explicit permission to test.
+
+Responder Configuration:
+The script automatically updates the Responder.conf file to disable SMB and HTTP if not already configured.
+
+Logging:
+The script provides color-coded output for better readability and logs misconfigured targets during the scanning phase.
+
+Output File:
+Identified vulnerable SMB targets are stored in vulnerable_smb_targets.txt.
+
+Network Interface:
+The default network interface is eth0, but it can be configured using the -i option to suit different environments.
 
 ## Disclaimer
 This tool is for educational and authorized testing purposes only. Unauthorized use of this tool may violate the law. The authors are not liable for any misuse or damage caused by this script.
