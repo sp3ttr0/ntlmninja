@@ -5,10 +5,10 @@ This script automates the setup and execution of an SMB relay attack using tools
 ## Prerequisites
 
 Ensure the following tools are installed and accessible in your system's PATH:
-tmux
-Responder
-Impacket
-CrackMapExec
+- **tmux**
+- **Responder**
+- **Impacket**
+- **CrackMapExec**
 
 Install these tools as needed before using the script.
 
@@ -35,7 +35,7 @@ Responder Configuration:
 The script automatically updates the Responder.conf file to disable SMB and HTTP if not already configured.
 
 Logging:
-The script provides color-coded output for better readability and logs misconfigured targets during the scanning phase.
+The script provides color-coded output for better readability and logs misconfigured targets during scanning.
 
 Output File:
 Identified vulnerable SMB targets are stored in vulnerable_smb_targets.txt.
@@ -44,4 +44,4 @@ Network Interface:
 The default network interface is eth0, but it can be configured using the -i option to suit different environments.
 
 ## Disclaimer
-This tool is for educational and authorized testing purposes only. Unauthorized use of this tool may violate the law. The authors are not liable for any misuse or damage caused by this script.
+This tool is provided for educational and authorized testing purposes only. Unauthorized use may violate laws and regulations. The authors of this script are not responsible for any misuse or damage caused by this tool. Using this script, you agree to take full responsibility for your actions and their consequences.
