@@ -43,5 +43,9 @@ Identified vulnerable SMB targets are stored in vulnerable_smb_targets.txt.
 Network Interface:
 The default network interface is eth0, but it can be configured using the -i option to suit different environments.
 
+Use Responsibly:
+This script is intended solely for authorized testing and research purposes. Always ensure you have explicit permission to perform penetration testing or security assessments on the target network.
+
 ## Disclaimer
+
 This tool is provided for educational and authorized testing purposes only. Unauthorized use may violate laws and regulations. The authors of this script are not responsible for any misuse or damage caused by this tool. Using this script, you agree to take full responsibility for your actions and their consequences.
