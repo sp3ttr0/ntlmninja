@@ -40,6 +40,22 @@ print_help() {
     echo -e "  ${YELLOW}-h${NC}               Display this help and exit."
 }
 
+# Banner function
+banner() {
+  echo -e "${CYAN}"
+  echo -e "                                                         "
+  echo -e "    ▄     ▄▄▄▄▀ █    █▀▄▀█    ▄   ▄█    ▄    ▄▄▄▄▄ ██    "
+  echo -e "     █ ▀▀▀ █    █    █ █ █     █  ██     █ ▄▀  █   █ █   "
+  echo -e " ██   █    █    █    █ ▄ █ ██   █ ██ ██   █    █   █▄▄█  "
+  echo -e " █ █  █   █     ███▄ █   █ █ █  █ ▐█ █ █  █ ▄ █    █  █  "
+  echo -e " █  █ █  ▀          ▀   █  █  █ █  ▐ █  █ █  ▀        █  "
+  echo -e " █   ██                ▀   █   ██    █   ██          █   "
+  echo -e "                        by sp3ttro                       "
+  echo -e "                                                         "
+  echo -e "                                                         "
+  echo -e "${RESET}"
+}       
+
 # Check if a tool is installed
 check_tool() {
     echo -e "[*] Checking ${YELLOW}$1${NC} if installed..."
