@@ -179,6 +179,8 @@ else
         echo -e "${RED}[!] Usage: ./$0 [-f TARGET_FILE] [-i NETWORK_INTERFACE]${NC}"
         exit 1
     fi
+
+    banner
     
     validate_network_interface
     # Check if required tools are installed
