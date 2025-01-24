@@ -143,8 +143,6 @@ run_smb_relay_attack() {
     tmux -CC attach-session -t "$session_name"
 }
 
-
-
 while getopts "f:hi:" opt; do
     case $opt in
     f)
@@ -168,6 +166,9 @@ while getopts "f:hi:" opt; do
     esac
 done
 
+# Display the banner
+banner
+
 # Start SMB Relay Attack
 if  tmux list-session | grep -qE "^$session_name:" > /dev/null; then
     echo -e "${RED}[!] Session name ${session_name} already exists.${NC}"
@@ -179,8 +180,6 @@ else
         echo -e "${RED}[!] Usage: ./$0 [-f TARGET_FILE] [-i NETWORK_INTERFACE]${NC}"
         exit 1
     fi
-
-    banner
     
     validate_network_interface
     # Check if required tools are installed
