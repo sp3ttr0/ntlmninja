@@ -166,7 +166,7 @@ while getopts "f:hi:" opt; do
     esac
 done
 
-# Display the banner
+# Show the banner
 banner
 
 # Start SMB Relay Attack
