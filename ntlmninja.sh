@@ -170,10 +170,29 @@ done
 banner
 
 # Start SMB Relay Attack
-if  tmux list-session | grep -qE "^$session_name:" > /dev/null; then
-    echo -e "${RED}[!] Session name ${session_name} already exists.${NC}"
-    # attach tmux session
-    tmux -CC attach-session -t $session_name
+if tmux has-session -t "$session_name" 2>/dev/null; then
+    echo -e "${YELLOW}[!] Tmux session '${session_name}' already exists.${NC}"
+    echo -e "${BLUE}Do you want to:${NC}"
+    echo -e "  [a] Attach to existing session"
+    echo -e "  [k] Kill existing session"
+    read -rp "$(echo -e "${YELLOW}Choose [a/k]: ${NC}")" user_choice
+
+    case "$user_choice" in
+        [aA])
+            echo -e "${GREEN}[*] Attaching to existing tmux session...${NC}"
+            tmux -CC attach-session -t "$session_name"
+            exit 0
+            ;;
+        [kK])
+            echo -e "${RED}[*] Killing existing tmux session...${NC}"
+            tmux kill-session -t "$session_name"
+            ;;
+        *)
+            echo -e "${RED}[!] Invalid choice. Exiting.${NC}"
+            exit 1
+            ;;
+    esac
+fi
 else
     # Check required arguments
     if [ -z "${TARGET_FILE}" ]; then
