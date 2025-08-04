@@ -75,13 +75,20 @@ validate_network_interface() {
 
 # Run crackmapexec
 run_crackmapexec() {
-    if [[ ! -f "${TARGET_SMB_FILE}" ]]; then
-        echo -e "[*] ${BLUE}Scanning for misconfigured SMB signing on targets...${NC}"
-        echo -e "[*] ${GREEN}Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${NC}"
-        crackmapexec smb --gen-relay-list "${TARGET_SMB_FILE}" "${TARGET_FILE}" | grep "signing:False" | while read -r line; do
-            echo -e "${YELLOW}[!] Misconfigured target: ${line}${NC}"
-            echo "$line" >> "${TARGET_SMB_FILE}"
+    echo -e "[*] ${BLUE}Scanning for misconfigured SMB signing on targets...${NC}"
+    echo -e "[*] ${GREEN}Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${NC}"
+    
+    # Run crackmapexec and let it generate the relay list
+    crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}"
+
+    # Optional: show which targets were found
+    if [ -s "${TARGET_SMB_FILE}" ]; then
+        echo -e "[+] ${YELLOW}Misconfigured SMB signing detected on the following targets:${NC}"
+        cat "${TARGET_SMB_FILE}" | while read -r ip; do
+            echo -e "${YELLOW}[!] $ip${NC}"
         done
+    else
+        echo -e "${RED}[!] No vulnerable targets found.${NC}"
     fi
 }
 
