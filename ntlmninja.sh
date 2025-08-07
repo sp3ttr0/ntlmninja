@@ -98,7 +98,7 @@ if [ -f "${responder_config_file}" ]; then
         if grep -qE '^SMB = Off$' "${responder_config_file}" && grep -qE '^HTTP = Off$' "${responder_config_file}"; then
             echo -e "${BLUE}[*] Responder.conf already configured with SMB and HTTP set to 'Off'.${NC}"
         else
-            echo -e " ${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${NC}"
+            echo -e "${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${NC}"
             sudo sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
             sudo sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
             echo -e "${GREEN}[+] Responder.conf updated successfully.${NC}"
