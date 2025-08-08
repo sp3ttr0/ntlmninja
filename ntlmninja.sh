@@ -30,10 +30,6 @@ RESET='\033[0m'
 # Network interface (dynamically detected by default)
 network_interface="$(ip route | awk '/default/ {print $5; exit}')"
 
-# Log file
-log_file="smb_relay_attack.log"
-exec > >(tee -a "$log_file") 2>&1
-
 # Print help
 print_help() {
     echo -e "${BLUE}Usage: $0 [-f TARGET_FILE] [-i NETWORK_INTERFACE] [-h]${RESET}"
