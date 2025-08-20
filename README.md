@@ -19,15 +19,22 @@ Install these tools as needed before using the script.
 
 ## Options
 ```
--f TARGET_FILE: Specifies the file containing a list of target IP addresses to scan for misconfigured SMB signing.
--i INTERFACE: Specifies the network interface to use for the attack (default: eth0).
--x Enable the --interactive shell mode in ntlmrelayx.
--h: Displays the help message and exits.
+-f TARGET_FILE       (Required) File containing a list of target IP addresses to scan for misconfigured SMB signing.
+-i NETWORK_INTERFACE (Optional) Network interface to use for the attack (default: eth0).
+-x                   (Optional) Enable interactive shell in ntlmrelayx (--interactive).
+-h                   (Optional) Displays the help message and exits.
 ```
 
 ## Example
 ```bash
-./ntlmninja.sh -f targets.txt -i eth0 -x
+# Run with target file and default interface
+./ntlmninja.sh -f targets.txt
+
+# Run with custom interface
+./ntlmninja.sh -f targets.txt -i wlan0
+
+# Run with interactive ntlmrelayx shell
+./ntlmninja.sh -f targets.txt -x
 ```
 
 ## Important Notes
