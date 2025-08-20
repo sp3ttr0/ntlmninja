@@ -32,10 +32,10 @@ network_interface="$(ip route | awk '/default/ {print $5; exit}')"
 
 # Print help
 print_help() {
-    echo -e "${BLUE}Usage: $0 [-f TARGET_FILE] [-i NETWORK_INTERFACE] [-h]${RESET}"
-    echo -e "  ${YELLOW}-f TARGET_FILE${RESET}   File containing target IPs to scan for misconfigured SMB signing."
-    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET} Specify network interface (default: ${network_interface})."
-    echo -e "  ${YELLOW}-x${RESET}               Enable interactive shell in ntlmrelayx."
+    echo -e "${BLUE}Usage: $0 -f TARGET_FILE [-i NETWORK_INTERFACE] [-x] [-h]${RESET}"
+    echo -e "  ${YELLOW}-f TARGET_FILE${RESET}   (Required) File containing target IPs to scan for misconfigured SMB signing."
+    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET} (Optional) Specify network interface (default: ${network_interface})."
+    echo -e "  ${YELLOW}-x${RESET}               (Optional) Enable interactive shell in ntlmrelayx."
     echo -e "  ${YELLOW}-h${RESET}               Display this help and exit."
 }
 
@@ -173,10 +173,12 @@ while getopts "f:hi:x" opt; do
         ;;
     \?)
         echo -e "${RED}[!] Invalid option: -$OPTARG${RESET}" >&2
+        print_help
         exit 1
         ;;
     :)
         echo -e "${RED}[!] Option -$OPTARG requires an argument.${RESET}" >&2
+        print_help
         exit 1
         ;;
     esac
@@ -213,7 +215,7 @@ fi
 # Check required arguments
 # Check required arguments
 if [ -z "${TARGET_FILE}" ]; then
-    echo -e "${RED}[!] Missing required argument: -f TARGET_FILE${NC}"
+    echo -e "${RED}[!] Missing required argument: -f TARGET_FILE${RESET}"
     print_help
     exit 1
 fi
