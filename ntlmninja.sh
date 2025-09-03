@@ -176,6 +176,12 @@ while getopts "f:hi:xd" opt; do
     esac
 done
 
+# Require root privileges
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}[!] This script must be run as root. Exiting.${RESET}"
+    exit 1
+fi
+
 # Show the banner
 banner
 
