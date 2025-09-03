@@ -79,15 +79,16 @@ run_crackmapexec() {
         exit 1
     }
     
-    # Optional: show which targets were found
     if [ -s "${TARGET_SMB_FILE}" ]; then
-        echo -e "${YELLOW}[+] Misconfigured SMB signing detected on the following targets:${RESET}"
-        cat "${TARGET_SMB_FILE}" | while read -r ip; do
-            echo -e "${YELLOW}[!] $ip${RESET}"
-        done
+    count=$(wc -l < "${TARGET_SMB_FILE}")
+    echo -e "${YELLOW}[+] Found $count vulnerable target(s):${RESET}"
+    while read -r ip; do
+        echo -e "${YELLOW}[!] $ip${RESET}"
+    done < "${TARGET_SMB_FILE}"
     else
         echo -e "${RED}[!] No vulnerable targets found.${RESET}"
     fi
+
 }
 
 # Edit Responder.conf file
@@ -184,7 +185,8 @@ if tmux has-session -t "$session_name" 2>/dev/null; then
     echo -e "${BLUE}Do you want to:${RESET}"
     echo -e "  [a] Attach to existing session"
     echo -e "  [k] Kill existing session"
-    read -rp "$(echo -e "${YELLOW}Choose [a/k]: ${RESET}")" user_choice
+    read -n1 -rp "$(echo -e "${YELLOW}Choose [a/k]: ${RESET}")" user_choice
+    echo    # newline for clean output
 
     case "$user_choice" in
         [aA])
@@ -221,7 +223,7 @@ run_crackmapexec
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
     if [ "$dry_run" = true ]; then
-        echo -e "${YELLOW}[!] Dry-run mode enabled. No attack will be launched.${RESET}"
+        echo -e "${YELLOW}[!] Dry-run mode: scan complete, attack skipped.${RESET}"
         echo -e "${GREEN}[+] Vulnerable targets saved in ${TARGET_SMB_FILE}.${RESET}"
         exit 0
     else
