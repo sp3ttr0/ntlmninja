@@ -27,7 +27,7 @@ network_interface="$(ip route | awk '/default/ {print $5; exit}')"
 
 # Print help
 print_help() {
-    echo -e "${BLUE}Usage: $0 -f TARGET_FILE [-i NETWORK_INTERFACE] [-x] [-h]${RESET}"
+    echo -e "${BLUE}Usage: $0 -f TARGET_FILE [-i NETWORK_INTERFACE] [-x] [-d] [-h]${RESET}"
     echo -e "  ${YELLOW}-f TARGET_FILE${RESET}   (Required) File containing target IPs to scan for misconfigured SMB signing."
     echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET} (Optional) Specify network interface (default: ${network_interface})."
     echo -e "  ${YELLOW}-x${RESET}               (Optional) Enable interactive shell in ntlmrelayx."
