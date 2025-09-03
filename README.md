@@ -22,6 +22,7 @@ Install these tools as needed before using the script.
 -f TARGET_FILE       (Required) File containing a list of target IP addresses to scan for misconfigured SMB signing.
 -i NETWORK_INTERFACE (Optional) Network interface to use for the attack (default: eth0).
 -x                   (Optional) Enable interactive shell in ntlmrelayx (--interactive).
+-d                   (Optional) Dry-run mode. Scan and list vulnerable targets without launching the attack.
 -h                   (Optional) Displays the help message and exits.
 ```
 
@@ -35,13 +36,16 @@ Install these tools as needed before using the script.
 
 # Run with interactive ntlmrelayx shell
 ./ntlmninja.sh -f targets.txt -x
+
+# Run in dry-run mode (scan only, no attack)
+./ntlmninja.sh -f targets.txt -d
 ```
 
 ## Important Notes
 
 Responder Configuration:
-If Responder’s config (/etc/responder/Responder.conf) has SMB or HTTP enabled, the script will automatically disable them to prevent conflicts with ntlmrelayx.
+Ensures SMB and HTTP are disabled in /etc/responder/Responder.conf to prevent conflicts with ntlmrelayx.
 
 ## Disclaimer
 
-This tool is for educational and authorized testing only. Do not use this script on networks or systems for which you do not have explicit permission. The authors are not responsible for any misuse or damage caused by this tool. Use at your own risk. You assume full responsibility for your actions and their consequences.
+This tool is for educational and authorized testing purposes only. Do not use this script on networks or systems for which you do not have explicit permission. The authors are not responsible for any misuse or damage caused by this tool. Use at your own risk. You assume full responsibility for your actions and their consequences.
