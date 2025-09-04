@@ -216,6 +216,7 @@ if [ -z "${TARGET_FILE}" ]; then
 fi
 
 validate_network_interface
+
 # Check if required tools are installed
 check_tool "tmux"
 check_tool "responder"
