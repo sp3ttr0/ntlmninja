@@ -22,7 +22,6 @@ Install these tools as needed before using the script.
 -f TARGET_FILE       (Required) File containing a list of target IP addresses to scan for misconfigured SMB signing.
 -i NETWORK_INTERFACE (Optional) Network interface to use for the attack (default: eth0).
 -x                   (Optional) Enable interactive shell in ntlmrelayx (--interactive).
--d                   (Optional) Dry-run mode. Scan and list vulnerable targets without launching the attack.
 -h                   (Optional) Displays the help message and exits.
 ```
 
@@ -36,9 +35,6 @@ Install these tools as needed before using the script.
 
 # Run with interactive ntlmrelayx shell
 ./ntlmninja.sh -f targets.txt -x
-
-# Run in dry-run mode (scan only, no attack)
-./ntlmninja.sh -f targets.txt -d
 ```
 
 ## Important Notes
