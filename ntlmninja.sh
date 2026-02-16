@@ -189,7 +189,6 @@ if tmux has-session -t "$session_name" 2>/dev/null; then
     echo -e "  [a] Attach to existing session"
     echo -e "  [k] Kill existing session"
     read -rp "$(echo -e "${YELLOW}Choose [a/k]: ${RESET}")" user_choice
-    echo    # newline for clean output
 
     case "$user_choice" in
         [aA])
