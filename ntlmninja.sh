@@ -96,8 +96,8 @@ if [ -f "${responder_config_file}" ]; then
             echo -e "${BLUE}[*] Responder.conf already configured with SMB and HTTP set to 'Off'.${RESET}"
         else
             echo -e "${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${RESET}"
-            sudo sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
-            sudo sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
+            sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
+            sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
             echo -e "${GREEN}[+] Responder.conf updated successfully.${RESET}"
         fi
     else
@@ -154,7 +154,7 @@ run_smb_relay_attack() {
     tmux -CC attach-session -t "$session_name"
 }
 
-while getopts "f:hi:xd" opt; do
+while getopts "f:hi:x" opt; do
     case $opt in
     f) TARGET_FILE="$OPTARG";;
     h) print_help; exit 0 ;;
@@ -213,6 +213,12 @@ fi
 if [ -z "${TARGET_FILE}" ]; then
     echo -e "${RED}[!] Missing required argument: -f TARGET_FILE${RESET}"
     print_help
+    exit 1
+fi
+
+# Check if file exists
+if [ ! -f "${TARGET_FILE}" ] || [ ! -r "${TARGET_FILE}" ]; then
+    echo -e "${RED}[!] Target file '${TARGET_FILE}' not found or not readable.${RESET}"
     exit 1
 fi
 
