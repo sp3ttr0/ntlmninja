@@ -116,19 +116,21 @@ run_crackmapexec() {
 
 # Edit Responder.conf file
 edit_responder_conf() {
-if [ -f "${responder_config_file}" ]; then
-        if grep -qE '^SMB = Off$' "${responder_config_file}" && grep -qE '^HTTP = Off$' "${responder_config_file}"; then
-            log INFO "${BLUE}[*] Responder.conf already configured with SMB and HTTP set to 'Off'.${RESET}"
-        else
-            log INFO "${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${RESET}"
-            sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
-            sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
-            log SUCCESS "${GREEN}[+] Responder.conf updated successfully.${RESET}"
-        fi
-    else
-        log ERROR "${RED}[!] Responder.conf file not found. Please ensure Responder is installed and configured properly.${RESET}"
-        exit 1
+    if [ ! -f "${responder_config_file}" ]; then
+        log ERROR "${RED}[!] Responder.conf file not found.${RESET}"
+        return 1
     fi
+
+    if grep -qE '^SMB = Off$' "${responder_config_file}" && grep -qE '^HTTP = Off$' "${responder_config_file}"; then
+        log INFO "${BLUE}[*] Responder.conf already configured.${RESET}"
+        return 0
+    fi
+
+    log INFO "${YELLOW}[*] Updating Responder.conf to turn off HTTP and SMB...${RESET}"
+    sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
+    sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
+
+    log SUCCESS "${GREEN}[+] Responder.conf updated successfully.${RESET}"
 }
 
 # Function to start or attach to a tmux session and initialize windows
@@ -262,7 +264,10 @@ validate_network_interface
 REQUIRED_TOOLS=("tmux" "responder" "impacket-ntlmrelayx" "crackmapexec")
 
 for tool in "${REQUIRED_TOOLS[@]}"; do
-    check_tool "$tool" || exit 1
+    check_tool "$tool" || {
+        log ERROR "${RED}[!] Missing dependency: $tool${RESET}"
+        exit 1
+    }
 done
 
 if ! run_crackmapexec; then
@@ -270,8 +275,8 @@ if ! run_crackmapexec; then
 fi
 
 if ! edit_responder_conf; then
-    log ERROR "${RED}[!] Failed to update Responder config. Exiting.${RESET}"
     exit 1
 fi
+
 sleep 3
 run_smb_relay_attack
