@@ -144,7 +144,7 @@ start_tmux_window() {
 
     # Ensure tmux session exists
     tmux has-session -t "$session_name" 2>/dev/null || {
-        log ERROR "${RED}[!] tmux session missing.${RESET}"
+        log ERROR "${RED}[!] tmux session '$session_name' does not exist.${RESET}"
         return 1
     }
 
@@ -165,11 +165,6 @@ run_smb_relay_attack() {
     # Ensure tmux session exists
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
         log SUCCESS "${GREEN}[+] Creating tmux session: $session_name.${RESET}"
-    
-        tmux new-session -d -s "$session_name" 2>/dev/null || {
-            log ERROR "Failed to create tmux session '$session_name'"
-            exit 1
-        }
     
         SESSION_CREATED=true
     fi
@@ -281,7 +276,9 @@ check_tool "responder"
 check_tool "impacket-ntlmrelayx"
 check_tool "crackmapexec"
 
-run_crackmapexec
+if ! run_crackmapexec; then
+    exit 1
+fi
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
     log SUCCESS "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
