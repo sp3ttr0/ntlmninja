@@ -142,20 +142,18 @@ start_tmux_window() {
     local window_name=$2
     local command=$3
 
-    # Ensure tmux session exists
-    tmux has-session -t "$session_name" 2>/dev/null || {
+    # ONLY check (no creation)
+    if ! tmux has-session -t "$session_name" 2>/dev/null; then
         log ERROR "${RED}[!] tmux session '$session_name' does not exist.${RESET}"
         return 1
-    }
+    fi
 
-    # Create window if needed
     if ! tmux list-windows -t "$session_name" 2>/dev/null | grep -qw "$window_name"; then
         tmux new-window -t "$session_name" -n "$window_name"
     fi
 
-    # Send command
-    tmux send-keys -t "$session_name:$window_name" "$command" || return 1
-    tmux send-keys -t "$session_name:$window_name" C-m || return 1
+    tmux send-keys -t "$session_name:$window_name" "$command"
+    tmux send-keys -t "$session_name:$window_name" C-m
 }
 
 # Function to execute SMB relay attack in tmux
