@@ -273,7 +273,6 @@ if ! run_crackmapexec; then
     exit 1
 fi
 
-log SUCCESS "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
 edit_responder_conf
 sleep 3
 run_smb_relay_attack
