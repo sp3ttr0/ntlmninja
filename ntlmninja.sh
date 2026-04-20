@@ -81,10 +81,7 @@ log() {
 
 # Check if a tool is installed
 check_tool() {
-    if ! command -v "$1" &>/dev/null; then
-        log ERROR "${RED}[!] $1 is not installed. Please install it first. Exiting.${RESET}"
-        exit 1
-    fi
+    command -v "$1" &>/dev/null || return 1
 }
 
 # Validate network interface
@@ -265,7 +262,7 @@ validate_network_interface
 REQUIRED_TOOLS=("tmux" "responder" "impacket-ntlmrelayx" "crackmapexec")
 
 for tool in "${REQUIRED_TOOLS[@]}"; do
-    check_tool "$tool"
+    check_tool "$tool" || exit 1
 done
 
 if ! run_crackmapexec; then
