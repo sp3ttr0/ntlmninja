@@ -276,6 +276,11 @@ check_tool "responder"
 check_tool "impacket-ntlmrelayx"
 check_tool "crackmapexec"
 
+tmux new-session -d -s "$session_name" || {
+    log ERROR "Failed to create tmux session"
+    exit 1
+}
+
 run_crackmapexec
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
