@@ -166,8 +166,8 @@ run_smb_relay_attack() {
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
         log SUCCESS "${GREEN}[+] Creating tmux session: $session_name.${RESET}"
     
-        tmux new-session -d -s "$session_name" || {
-            log ERROR "Failed to create tmux session"
+        tmux new-session -d -s "$session_name" 2>/dev/null || {
+            log ERROR "Failed to create tmux session '$session_name'"
             exit 1
         }
     
