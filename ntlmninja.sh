@@ -35,14 +35,12 @@ RESET='\033[0m'
 network_interface="$(ip -o -4 route show to default | awk '{print $5}' | head -n1)"
 
 cleanup() {
-    exit_code=$?
-    
-    if [ $exit_code -ne 0 ] && [ "$SESSION_CREATED" = true ]; then
-        echo -e "${YELLOW}[*] Script exited unexpectedly. Cleaning up...${RESET}"
-        
-        if tmux has-session -t "$session_name" 2>/dev/null; then
-            tmux kill-session -t "$session_name"
-        fi
+    local exit_code=$?
+
+    if [ "$SESSION_CREATED" = true ] && [ $exit_code -ne 0 ]; then
+        echo -e "${YELLOW}[*] Cleaning up tmux session...${RESET}"
+        tmux has-session -t "$session_name" 2>/dev/null && \
+        tmux kill-session -t "$session_name"
     fi
 }
 
@@ -135,16 +133,23 @@ start_tmux_window() {
     local session_name=$1
     local window_name=$2
     local command=$3
+
+    # Ensure tmux session exists
+    tmux has-session -t "$session_name" 2>/dev/null || {
+        echo -e "${RED}[!] tmux session missing.${RESET}"
+        exit 1
+    }
     
     # Create the window in the tmux session
     if tmux has-session -t "$session_name" 2>/dev/null; then
-        if ! tmux list-windows -t "$session_name" | grep -q "$window_name"; then
+        if tmux list-windows -t "$session_name" 2>/dev/null | grep -qw "$window_name"; then
             tmux new-window -t "$session_name" -n "$window_name"
         fi
     fi
     
     # Send the command to the new tmux window
-    tmux send-keys -t "$session_name:$window_name" "$command" C-m
+    tmux send-keys -t "$session_name:$window_name" "$command"
+    tmux send-keys -t "$session_name:$window_name" C-m
 }
 
 # Function to execute SMB relay attack in tmux
