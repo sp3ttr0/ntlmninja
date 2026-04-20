@@ -142,11 +142,7 @@ start_tmux_window() {
     local window_name=$2
     local command=$3
 
-    # ONLY check (no creation)
-    if ! tmux has-session -t "$session_name" 2>/dev/null; then
-        log ERROR "${RED}[!] tmux session '$session_name' does not exist.${RESET}"
-        return 1
-    fi
+    # Only responsibility: manage windows + send commands
 
     if ! tmux list-windows -t "$session_name" 2>/dev/null | grep -qw "$window_name"; then
         tmux new-window -t "$session_name" -n "$window_name"
