@@ -76,6 +76,7 @@ log() {
     local msg="$2"
 
     echo -e "[$level] $msg"
+    mkdir -p "$("$LOG_DIR" "$ATTACK_LOG")"
     echo "[$level] $(echo "$msg" | sed -r 's/\x1B\[[0-9;]*[mK]//g')" >> "$ATTACK_LOG"
 }
 
@@ -147,7 +148,7 @@ start_tmux_window() {
         tmux new-window -t "$session_name" -n "$window_name"
     fi
 
-    tmux send-keys -t "$session_name:$window_name" "$command"
+    tmux send-keys -t "$session_name:$window_name" "bash -c '$command'"
     tmux send-keys -t "$session_name:$window_name" C-m
 }
 
