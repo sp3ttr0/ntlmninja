@@ -165,7 +165,12 @@ run_smb_relay_attack() {
     # Ensure tmux session exists
     if ! tmux has-session -t "$session_name" 2>/dev/null; then
         log SUCCESS "${GREEN}[+] Creating tmux session: $session_name.${RESET}"
-        tmux new-session -d -s "$session_name"
+    
+        tmux new-session -d -s "$session_name" || {
+            log ERROR "Failed to create tmux session"
+            exit 1
+        }
+    
         SESSION_CREATED=true
     fi
 
@@ -275,11 +280,6 @@ check_tool "tmux"
 check_tool "responder"
 check_tool "impacket-ntlmrelayx"
 check_tool "crackmapexec"
-
-tmux new-session -d -s "$session_name" || {
-    log ERROR "Failed to create tmux session"
-    exit 1
-}
 
 run_crackmapexec
 
