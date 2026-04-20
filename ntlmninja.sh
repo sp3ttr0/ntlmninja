@@ -105,7 +105,7 @@ run_crackmapexec() {
     # Run crackmapexec and let it generate the relay list
     crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}" || {
         log ERROR "${RED}[!] crackmapexec failed. Exiting.${RESET}"
-        exit 1
+        return 1
     }
     
     if [ -s "${TARGET_SMB_FILE}" ]; then
@@ -270,7 +270,9 @@ check_tool "responder"
 check_tool "impacket-ntlmrelayx"
 check_tool "crackmapexec"
 
-run_crackmapexec
+if ! run_crackmapexec; then
+    exit 1
+fi
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
     log SUCCESS "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
