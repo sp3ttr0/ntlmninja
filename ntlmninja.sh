@@ -129,7 +129,7 @@ run_crackmapexec() {
 # Edit Responder.conf file
 edit_responder_conf() {
     if [ -f "${RESPONDER_CONFIG_FILE}" ]; then
-        if grep -qE '^SMB = Off$' "${RESPONDER_CONFIG_FILE}" && grep -qE '^HTTP = Off$' "${RESPONDER_CONFIG_FILE}"; then
+        if grep -qiE '^\s*SMB\s*=\s*off\s*$' "${RESPONDER_CONFIG_FILE}" && grep -qiE '^\s*HTTP\s*=\s*off\s*$' "${RESPONDER_CONFIG_FILE}"; then
             echo -e "${BLUE}[*] Responder.conf already configured with SMB and HTTP set to 'Off'.${RESET}"
         else
             echo -e "${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${RESET}"
@@ -264,12 +264,7 @@ main() {
     if [ "$network_interface" = "auto" ]; then
         network_interface="$(detect_network_interface)"
     fi
-    
-    if [ -z "$network_interface" ]; then
-        echo -e "${RED}[!] Could not detect network interface.${RESET}"
-        exit 1
-    fi
-    
+        
     validate
     
     check_dependencies
