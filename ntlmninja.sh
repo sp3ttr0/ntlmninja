@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # =============================================================
 # ntlmninja.sh - SMB Relay Attack Automation Script
@@ -263,6 +264,11 @@ main() {
     
     if [ "$network_interface" = "auto" ]; then
         network_interface="$(detect_network_interface)"
+    fi
+    
+    if [ -z "$network_interface" ]; then
+        echo -e "${RED}[!] No active network interface detected (no default route).${RESET}"
+        exit 1
     fi
         
     validate
