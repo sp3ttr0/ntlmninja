@@ -180,7 +180,7 @@ run_smb_relay_attack() {
     echo -e "${CYAN}Starting impacket-ntlmrelayx...${RESET}"
     start_tmux_window "$SESSION_NAME" "ntlmrelayx" "$relay_command"
 
-    tmux -CC attach-session -t "$SESSION_NAME"
+    tmux attach-session -t "$SESSION_NAME"
 }
 
 parse_args() {
@@ -223,7 +223,7 @@ check_tmux_session() {
         case "$user_choice" in
             [aA])
                 echo -e "${GREEN}[*] Attaching to existing tmux session...${RESET}"
-                tmux -CC attach-session -t "$SESSION_NAME"
+                tmux attach-session -t "$SESSION_NAME"
                 exit 0
                 ;;
             [kK])
