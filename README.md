@@ -1,88 +1,109 @@
-# hexahavoc
+# ntlmninja
 
-**hexahavoc** is an automation script designed to facilitate an IPv6 DNS takeover attack. It leverages **mitm6** and **impacket-ntlmrelayx** within a **tmux** session to enable network administrators and penetration testers to conduct research and test IPv6 DNS vulnerabilities.
-
-This script performs a man-in-the-middle attack via IPv6 rogue DNS server, allowing for NTLM relay attacks and DNS takeover simulations.
+This script automates the setup and execution of an SMB relay attack using tools like Responder, Impacket’s ntlmrelayx, NetExec, and tmux. It identifies misconfigured SMB signing on target machines and launches a relay attack against vulnerable hosts within a managed tmux session.
 
 ## Prerequisites
 
-Run this script on **Linux**, as root, from an interactive terminal outside tmux. macOS is not supported. Ensure that the following tools are installed:
+Ensure the following tools are installed and accessible in your system's PATH:
 
-- **Bash**, **Python 3**, and **iproute2** (`ip`): For the launcher and local input validation.
-- **tmux**: For managing multiple terminal sessions.
-- **mitm6**: To facilitate IPv6 DNS takeover attacks.
-- **impacket**: For NTLM relay and credential dumping.
-- **date**, **mktemp**, and **tee**: For timestamped run folders and console logging.
+- **tmux**
+- **Responder** (`responder`)
+- **Impacket** (`impacket-ntlmrelayx`)
+- **NetExec** (`nxc`)
+- **ip** (used to detect and validate the network interface)
+- **Python 3** (standard library only, used to validate target addresses)
 
-Install them if they are not available in your environment.
+Install these tools as needed before using the script. The full workflow, session management, and configuration restoration require root privileges. Scan-only mode needs NetExec, Python 3, and standard shell utilities; it does not require Responder, Impacket, tmux, or root. Session management checks tmux independently of scanning dependencies.
 
-## Usage:
+## Usage
+
 ```bash
-sudo ./hexahavoc.sh -d <target_domain> -t <target_ip> [-i <interface>] [-l <loot_dir>] [--duration <seconds>] [-v | -s]
+sudo ./ntlmninja.sh -f TARGET_FILE [options]
 ```
 
 ## Options
-```
--d <target_domain>    (Required) Specifies the target domain for the DNS takeover.
--t <target_ip>        (Required) Specifies a literal IPv4 or IPv6 address. Hostnames and IPv6 zone IDs are not accepted.
--i <interface>        (Optional) Network interface to use. Defaults to eth0.
--l <folder>           (Optional) Parent directory for timestamped run folders. Defaults to dumps/.
---duration <seconds> (Optional) Close the new tmux session after 1–2147483647 whole seconds. Default: no time limit.
--v                    (Optional) Trace launcher commands; arguments may appear in terminal output.
--s                    (Optional) Suppress launcher status messages; errors, prompts, and tool output remain visible. Cannot be combined with -v.
--h                    Show help.
-```
-
-## Example
-```bash
-sudo ./hexahavoc.sh -d example.com -t 192.168.1.10 -i eth1 -l /tmp/loot -v
-```
-
-Run for 60 seconds, then automatically close the session and its tool panes:
-
-```bash
-sudo ./hexahavoc.sh -d example.com -t 192.168.1.10 -i eth1 --duration 60
-```
-
-`--duration=60` is also accepted. The timer starts just after session creation, before the startup checks, and keeps running if you detach. An attached launcher exits when the session closes. The timer runs in a separate `duration` window; leave that window open to retain the time limit. Closing the entire session early also closes its timer. A duration cannot be added to an existing session through this flag.
-
-## Saved logs
-
-Each new run creates a folder named with the local execution date and time, plus a unique suffix to prevent collisions:
 
 ```text
-dumps/
-└── 2026-09-29_14-30-00_a1B2c3/
-    ├── mitm6.log
-    └── ntlmrelayx.log
+-f TARGET_FILE        Required for scans: one IP address or canonical CIDR per line.
+-i NETWORK_INTERFACE (Optional) Network interface to use for the attack (default: automatically detected from the default route).
+-x                   (Optional) Enable interactive shell in ntlmrelayx (--interactive).
+-h                   (Optional) Displays the help message and exits.
+-s                   Scan only; do not modify configuration or start services.
+-o OUTPUT_DIR        Parent directory for fresh runs (default: ./ntlmninja-runs).
+-r BACKUP_FILE       Restore Responder configuration from a saved backup and exit.
+-a                   Attach to the existing session and exit after attachment ends.
+-k                   Stop the existing session and exit; configuration is not restored.
+-C                   Disable wrapper colors; NO_COLOR and redirected output do this too.
 ```
 
-Each file captures its tool's standard output and standard error from startup, while the same output remains visible in tmux. Python output is unbuffered to reduce logging delays. Logs remain on disk after detaching, startup failure, or duration expiry. Output not yet emitted by a tool when it is stopped cannot be captured.
+Use `-a`, `-k`, and `-r` separately from scan options and from each other. Scan-only mode rejects `-i` because NetExec selects its own routing, and rejects `-x` because no session is launched. The full workflow's `-i` selects the Responder interface, not the scanner's interface.
 
-The `-l` flag changes the parent directory. Additional files produced by ntlmrelayx are saved inside the same run folder. Existing-session attachment continues the original logs rather than creating a new folder. New run folders are private (`700`) and log files are private (`600`).
+Target files support IPv4, IPv6, canonical CIDR networks, blank lines, UTF-8 BOMs, CRLF line endings, and `#` comments. Duplicates are removed. Hostnames, address ranges, scoped IPv6 addresses, malformed addresses, and CIDRs with host bits set are rejected before scanning. An empty or comment-only file is an error. For example, `192.0.2.0/24` is accepted, while `192.0.2.1/24` is rejected rather than silently expanding it to a network.
 
-## Session lifecycle
+## Example
 
-The launcher checks that both session-owned processes remain alive during a three-second startup interval. This does not confirm service readiness or a successful assessment; inspect the tool output in tmux.
+```bash
+# Scan only and review the findings
+./ntlmninja.sh -s -f targets.txt
 
-Startup or attachment failures trigger cleanup of the session created by that invocation. A successful detach deliberately leaves the session running until its duration expires, or indefinitely if no duration was supplied. Stop it explicitly with tmux when finished. Existing sessions are never automatically cleaned up: without `--duration`, the launcher prompts to attach or kill and exit.
+# Put a fresh run under a custom output directory
+./ntlmninja.sh -s -f targets.txt -o './assessment reports'
 
-Output paths containing spaces are supported. New directories and files use a restrictive umask; existing directory permissions are unchanged. The launcher does not require a successful ping or perform DNS resolution to validate the target.
+# Run with target file and automatically detected interface
+sudo ./ntlmninja.sh -f targets.txt
+
+# Run with custom interface
+sudo ./ntlmninja.sh -f targets.txt -i wlan0
+
+# Run with interactive ntlmrelayx shell
+sudo ./ntlmninja.sh -f targets.txt -x
+
+# Manage a session without a target file or another scan
+sudo ./ntlmninja.sh -a
+sudo ./ntlmninja.sh -k
+```
 
 ## Important Notes
-- Use Responsibly: This script is intended solely for authorized testing and research purposes. Always ensure that you have explicit permission to perform penetration testing or security assessments on the target network.
-- IPv6 Requirement: This attack only works in environments with IPv6 enabled. Ensure your target network is IPv6-enabled for successful execution.
+
+Responder Configuration:
+Ensures SMB and HTTP are disabled in `/etc/responder/Responder.conf` to prevent conflicts with ntlmrelayx.
+
+Each new scan creates a private, unique run directory containing:
+
+- `input-targets.txt`: the original input snapshot.
+- `targets.txt`: validated, normalized, deduplicated scan inputs.
+- `vulnerable_smb_targets.txt`: the candidate list; the legacy filename does not imply proven exploitability.
+- `attack.log`: raw NetExec output for diagnostics.
+- `events.log`: wrapper events with UTC timestamps, separate from scanner output.
+- `status`: `running` while active; `scan-complete`, `attachment-ended`, or `failed` plus an exit code when the wrapper ends normally or handles a signal.
+
+Session logs are also written there. Failed scans retain partial output for diagnosis; a nonzero exit means the results must not be treated as a successful run. Abrupt termination such as SIGKILL can leave a stale `running` status. Status records the wrapper's outcome, not ongoing service health. An empty candidate list is not proof that every host was assessed successfully. A finding means signing was reported as not required, not that an attack will succeed.
+
+Before configuration changes, the full workflow saves and verifies `Responder.conf.backup` in that run directory. It requires exactly one active SMB setting and one active HTTP setting, stages the edits, and verifies the replacement. Symlinked configuration files are rejected. To restore a backup after stopping the running services:
+
+```bash
+sudo ./ntlmninja.sh -r /absolute/path/to/run.XXXXXXXX/Responder.conf.backup
+```
+
+Restoration replaces the configuration contents with the selected backup, including any settings changed since that backup. It is explicit, not automatic on tmux detach. Scan-only mode does not create a configuration backup because it never changes the configuration. A later full run performs a new scan rather than reusing a scan-only candidate list.
+
+Scanner and scan-log pipeline failures stop the workflow. tmux command failures are also checked, but successful tmux dispatch does not prove the launched services are healthy. Detaching leaves the session running; a partial session startup can leave an already-started process running. Review the session and its logs before restoring configuration.
+
+Existing-session prompts require an interactive terminal. For scripted use, choose `-a` or `-k` explicitly. `-k` stops the fixed `smb_relay_attack` session; it does not restart it. Exiting, interruption, and detaching do not automatically stop the session or restore configuration.
 
 ## Offline checks
 
-From the tool directory, run:
+From this directory:
 
 ```bash
-bash -n hexahavoc.sh
-python3 -m unittest discover -s tests -v
+bash -n ntlmninja.sh
+python3 tests/test_workflow.py
+# Optional, when ShellCheck is installed:
+shellcheck ntlmninja.sh
 ```
 
-The tests replace tmux and network commands with mocks and bypass the root guard only in a temporary test copy. They do not run an assessment or verify compatibility with installed tool versions.
+The tests mock network and service commands and use temporary configuration files. They cover failure propagation, fresh outputs, input normalization and rejection, configuration backup/restore, route parsing, session actions, and run status. They do not validate live NetExec results or service health.
 
 ## Disclaimer
-This tool is provided for educational and authorized security testing purposes only. Unauthorized use may violate laws and regulations. The authors and contributors of this tool are not responsible for any misuse or damage. By using this script, you accept full responsibility for your actions.
+
+This tool is for educational and authorized testing purposes only. Do not use this script on networks or systems for which you do not have explicit permission. The authors are not responsible for any misuse or damage caused by this tool. Use at your own risk. You assume full responsibility for your actions and their consequences.
