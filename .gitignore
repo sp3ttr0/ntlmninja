@@ -1,0 +1,23 @@
+# Generated assessment output (default and common custom directories)
+ntlmninja-runs/
+ntlmninja-reports/
+reports/
+run.*/
+
+# Target lists and normalized input snapshots
+targets.txt
+*-targets.txt
+vulnerable_smb_targets.txt
+
+# Logs and configuration copies
+*.log
+Responder.conf
+Responder.conf.*
+
+# Python caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# macOS metadata
+.DS_Store
