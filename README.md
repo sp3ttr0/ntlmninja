@@ -1,67 +1,47 @@
-# ntlmninja
+# hexahavoc
 
-Checks SMB signing with NetExec and manages Responder and ntlmrelayx in tmux. Includes a scan-only mode.
+Automates mitm6 and ntlmrelayx in tmux for authorized IPv6 DNS and NTLM relay testing. Use only on networks you have permission to assess.
 
-## Dependencies
+## Requirements
 
-- Bash and standard shell utilities
-- NetExec (`nxc`)
-- Python 3
-- Full workflow: `tmux`, `responder`, `impacket-ntlmrelayx`, and `ip`
-
-Full runs, session management, and configuration restoration require root. Scan-only mode does not.
+- Linux with IPv6 enabled; run as root from an interactive terminal outside tmux.
+- Bash, Python 3, tmux, and iproute2 (`ip`).
+- `mitm6` and `impacket-ntlmrelayx` available in PATH.
+- Standard utilities: `mkdir`, `sleep`, `date`, `mktemp`, and `tee`.
 
 ## Usage
 
 ```bash
-# Scan only
-./ntlmninja.sh -s -f targets.txt
-
-# Full workflow (automatically detects the Responder interface)
-sudo ./ntlmninja.sh -f targets.txt
-
-# Specify the Responder interface and enable interactive mode
-sudo ./ntlmninja.sh -f targets.txt -i eth0 -x
+chmod +x hexahavoc.sh
+sudo ./hexahavoc.sh -d example.com -t 192.168.1.10 -i eth0 --duration 60
 ```
 
-Targets: one IPv4/IPv6 address or canonical CIDR per line (e.g. `192.0.2.0/24`). Blank lines and `#` comments are allowed; duplicates are removed. Hostnames and empty target lists are rejected.
-
-## Options
-
-| Option | Purpose |
+| Option | Description |
 | --- | --- |
-| `-f FILE` | Target file, required for scans |
-| `-s` | Scan only |
-| `-i INTERFACE` | Responder interface; default: auto |
-| `-x` | Interactive ntlmrelayx mode |
-| `-o DIR` | Output directory; default: `./ntlmninja-runs` |
-| `-a` | Attach to the existing session |
-| `-k` | Stop the existing session |
-| `-r FILE` | Restore a Responder configuration backup |
-| `-C` | Disable colors |
-| `-h` | Show help |
+| `-d <domain>` | Target domain (required). |
+| `-t <IP>` | Target IPv4/IPv6 address (required; no hostnames or zone IDs). |
+| `-i <interface>` | Network interface; default: `eth0`. |
+| `-l <folder>` | Output parent folder; default: `dumps/`. |
+| `--duration <seconds>` | Positive whole seconds before closing the new session; default: unlimited. |
+| `-v` | Trace launcher commands. |
+| `-s` | Hide launcher status messages; tool output and errors remain visible. Cannot combine with `-v`. |
+| `-h` | Show help. |
 
-Use `-a`, `-k`, or `-r` separately from scan options. Scan-only mode cannot use `-i` or `-x`.
+## Output and sessions
 
-## Important notes
+Each run creates a timestamped folder such as `dumps/2026-09-29_14-30-00_a1B2c3/`, containing separate `mitm6.log` and `ntlmrelayx.log` files plus any files ntlmrelayx generates. Logs include output and errors, remain visible in tmux, and are retained even if the attempt fails. Their presence does not confirm success.
 
-- Each run saves fresh results, logs, and status in a unique output folder. Signing not required is a finding, not proof of exploitability.
-- Full runs back up `/etc/responder/Responder.conf` before disabling SMB and HTTP. Scan-only mode leaves it unchanged.
-- Detaching or exiting leaves session processes running. Stop them with `sudo ./ntlmninja.sh -k`, then restore configuration explicitly:
+Detaching leaves the tools running. With `--duration`, the session closes automatically even after detaching; leave its `duration` window open. The timer starts after session creation and applies only to new sessions. Without a duration, stop the session manually when finished.
+
+## Offline tests
 
 ```bash
-sudo ./ntlmninja.sh -r /path/to/run.XXXXXXXX/Responder.conf.backup
+bash -n hexahavoc.sh
+python3 -m unittest discover -s tests -v
 ```
 
-Restoration replaces the entire configuration with the selected backup. Review logs for failures; session startup does not confirm service health.
-
-## Offline checks
-
-```bash
-bash -n ntlmninja.sh
-python3 tests/test_workflow.py
-```
+Tests use mocks and do not run network attacks.
 
 ## Disclaimer
 
-This tool is for educational and authorized testing purposes only. Do not use this script on networks or systems for which you do not have explicit permission. The authors are not responsible for any misuse or damage caused by this tool. Use at your own risk. You assume full responsibility for your actions and their consequences.
+This tool is provided for educational and authorized security testing purposes only. Unauthorized use may violate laws and regulations. The authors and contributors of this tool are not responsible for any misuse or damage. By using this script, you accept full responsibility for your actions.
