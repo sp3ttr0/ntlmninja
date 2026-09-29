@@ -24,6 +24,23 @@ SESSION_ACTION=""
 RUN_STATUS="preparing"
 SESSION_ATTEMPTED=false
 NO_COLORS=false
+LOCK_HELD=false
+LOCK_DIR=""
+
+acquire_lock() {
+    [ "$LOCK_HELD" = false ] || return 0
+    LOCK_DIR="${RESPONDER_CONFIG_FILE}.ntlmninja.lock"
+    # Atomic directory creation coordinates runs across output directories.
+    mkdir -m 700 "$LOCK_DIR" 2>/dev/null || fail "Cannot acquire lock: $LOCK_DIR. Another run may be active. If a run crashed, verify it has stopped before manually removing the stale lock."
+    LOCK_HELD=true
+    printf '%s\n' "$$" > "$LOCK_DIR/pid" || fail 'Cannot record lock owner.'
+}
+
+release_lock() {
+    [ "$LOCK_HELD" = true ] || return 0
+    rm -f "$LOCK_DIR/pid" && rmdir "$LOCK_DIR" || return 1
+    LOCK_HELD=false
+}
 
 log() {
     local stamp line
@@ -40,6 +57,10 @@ fail() { log "ERROR: $*" >&2 || printf 'Error: %s\n' "$*" >&2; exit 1; }
 finish_run() {
     local result=$?
     trap - EXIT
+    if ! release_lock; then
+        printf 'Error: could not release lock: %s\n' "$LOCK_DIR" >&2
+        result=1
+    fi
     if [ -n "$RUN_DIR" ]; then
         [ "$result" -eq 0 ] || RUN_STATUS=failed
         if ! printf 'status=%s\nexit_code=%s\n' "$RUN_STATUS" "$result" > "$RUN_DIR/status"; then
@@ -264,7 +285,25 @@ replace_config() {
 }
 
 restore_config() {
+    local expected session_result
+    acquire_lock
     [ -f "$RESTORE_BACKUP" ] && [ -r "$RESTORE_BACKUP" ] && [ -s "$RESTORE_BACKUP" ] || fail 'Backup is missing, empty, or unreadable.'
+    [ ! -L "$RESTORE_BACKUP" ] || fail 'Refusing a symlinked backup.'
+    case "$RESTORE_BACKUP" in
+        */Responder.conf.backup) expected="${RESTORE_BACKUP%/*}/Responder.conf.updated" ;;
+        Responder.conf.backup) expected='./Responder.conf.updated' ;;
+        *) fail 'Select the original Responder.conf.backup from its run directory.' ;;
+    esac
+    tmux has-session -t "$SESSION_NAME" 2>/dev/null
+    session_result=$?
+    [ "$session_result" -ne 0 ] || fail 'Stop the existing session with -k before restoring configuration.'
+    [ "$session_result" -eq 1 ] || fail 'Cannot determine session state; restoration cancelled.'
+    if cmp -s "$RESTORE_BACKUP" "$RESPONDER_CONFIG_FILE"; then
+        log 'Configuration already matches this backup; no changes made.' || return 1
+        return 0
+    fi
+    [ -f "$expected" ] && [ -r "$expected" ] && [ ! -L "$expected" ] || fail 'Missing trusted post-change snapshot (Responder.conf.updated); restoration cancelled.'
+    cmp -s "$expected" "$RESPONDER_CONFIG_FILE" || fail 'Configuration differs from this run’s post-change snapshot. It may have been edited since the run; restoration cancelled without overwriting it.'
     replace_config "$RESTORE_BACKUP" || fail 'Configuration restoration failed.'
     printf '[+] Responder configuration restored and verified.\n'
 }
@@ -311,6 +350,7 @@ run_smb_relay_attack() {
     start_tmux_window "$SESSION_NAME" "ntlmrelayx" "$relay_command" || return 1
 
     log 'Attaching to tmux. Detach leaves processes running; use -k to stop and -r to restore configuration.' || return 1
+    release_lock || return 1
     tmux attach-session -t "$SESSION_NAME" || return 1
     RUN_STATUS=attachment-ended
 }
@@ -355,9 +395,11 @@ manage_session() {
     case "$SESSION_ACTION" in
         attach)
             SESSION_ATTEMPTED=true
+            release_lock || return 1
             log 'Attaching to existing session. Detach leaves processes running.' || return 1
             tmux attach-session -t "$SESSION_NAME" ;;
         stop)
+            acquire_lock
             tmux kill-session -t "$SESSION_NAME" || return 1
             log 'Session stopped. Configuration is unchanged; use -r BACKUP_FILE to restore it.' ;;
     esac
@@ -407,7 +449,7 @@ check_dependencies() {
     local t
     local tools=("nxc" "python3" "awk" "tee" "cp" "mkdir" "mktemp" "date")
     if [ "$scan_only" != true ]; then
-        tools+=("tmux" "responder" "impacket-ntlmrelayx" "ip" "cmp" "cat" "mv" "rm" "date" "sleep")
+        tools+=("tmux" "responder" "impacket-ntlmrelayx" "ip" "cmp" "cat" "mv" "rm" "rmdir" "date" "sleep")
     fi
 
     for t in "${tools[@]}"; do
@@ -424,14 +466,14 @@ main() {
 
     if [ -n "$SESSION_ACTION" ]; then
         validate_privileges
-        for tool in tmux date; do check_tool "$tool"; done
+        for tool in tmux date mkdir rm rmdir; do check_tool "$tool"; done
         manage_session || fail 'Session action failed.'
         return 0
     fi
 
     if [ -n "$RESTORE_BACKUP" ]; then
         validate_privileges
-        for tool in cp cmp cat mktemp mv rm date; do check_tool "$tool"; done
+        for tool in cp cmp cat mktemp mv rm date tmux mkdir rmdir; do check_tool "$tool"; done
         restore_config
         return
     fi
@@ -460,6 +502,7 @@ main() {
     # Show the banner
     banner
 
+    acquire_lock
     check_tmux_session
     prepare_run
     

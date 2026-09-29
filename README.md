@@ -53,7 +53,11 @@ Use `-a`, `-k`, or `-r` separately from scan options. Scan-only mode cannot use 
 sudo ./ntlmninja.sh -r /path/to/run.XXXXXXXX/Responder.conf.backup
 ```
 
-Restoration replaces the entire configuration with the selected backup. Review logs for failures; session startup does not confirm service health.
+Restoration requires the original `Responder.conf.backup` and adjacent `Responder.conf.updated` snapshot. It refuses to overwrite later configuration edits or restore while the session is running. If the configuration already matches the backup, no change is needed. Keep both files together.
+
+Full-run setup, session stopping, and restoration share an atomic lock at `/etc/responder/Responder.conf.ntlmninja.lock`. Conflicting operations stop with an error; scan-only runs can run concurrently. The lock is released before attachment and on normal exit or handled interruption. After a hard crash, inspect the lock's `pid` file and verify no run is active before manually removing the stale lock. Never remove an active lock. This coordinates ntlmninja runs; other tools and manual edits do not honor it.
+
+Review logs for failures; session startup does not confirm service health.
 
 ## Offline checks
 

@@ -27,6 +27,7 @@ exit "${SCAN_EXIT:-0}"
 ''')
         for command in ('tmux', 'responder', 'impacket-ntlmrelayx', 'ip'):
             self.mock(command, 'echo "Unexpected service invocation" >&2; exit 99\n')
+        self.mock('tmux', 'if [ "$1" = has-session ]; then exit 1; fi; exit 99\n')
 
     def mock(self, name, body):
         path = self.bin / name
@@ -86,7 +87,7 @@ exit "${SCAN_EXIT:-0}"
         self.assertEqual(config.read_text(), original.replace('= On', '= Off'))
         self.assertEqual(config.stat().st_mode & 0o777, 0o640)
         restored = subprocess.run(['bash', '-c',
-            'source "$1"; RESPONDER_CONFIG_FILE="$2"; RESTORE_BACKUP="$3"; restore_config',
+            'source "$1"; trap finish_run EXIT; RESPONDER_CONFIG_FILE="$2"; RESTORE_BACKUP="$3"; restore_config',
             'test', str(SCRIPT), str(config), str(run / 'Responder.conf.backup')],
             env=self.env, capture_output=True, text=True)
         self.assertEqual(restored.returncode, 0, restored.stderr)
@@ -168,8 +169,8 @@ exit "${SCAN_EXIT:-0}"
         for flag, expected in (('-a', 'attach-session'), ('-k', 'kill-session')):
             # Override the privilege check only in this sourced, mocked test.
             result = subprocess.run(['bash', '-c',
-                'source "$1"; validate_privileges() { :; }; main "$2"',
-                'test', str(SCRIPT), flag], env=self.env, capture_output=True, text=True)
+                'source "$1"; RESPONDER_CONFIG_FILE="$3"; validate_privileges() { :; }; main "$2"',
+                'test', str(SCRIPT), flag, str(self.root / 'Responder.conf')], env=self.env, capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn('tmux:' + expected, result.stdout)
             self.assertFalse(marker.exists())
@@ -182,6 +183,69 @@ exit "${SCAN_EXIT:-0}"
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('nxc is not installed', result.stdout + result.stderr)
         self.assertFalse(self.reports.exists())
+
+    def restore(self, config, run):
+        return subprocess.run(['bash', '-c',
+            'source "$1"; trap finish_run EXIT; RESPONDER_CONFIG_FILE="$2"; '
+            'RESTORE_BACKUP="$3"; restore_config', 'test', str(SCRIPT), str(config),
+            str(run / 'Responder.conf.backup')], env=self.env, capture_output=True, text=True)
+
+    def test_restore_refuses_later_edits(self):
+        result, config, run = self.config_call('edit_responder_conf', 'SMB = On\nHTTP = On\n')
+        self.assertEqual(result.returncode, 0)
+        changed = config.read_text() + 'Other = new\n'
+        config.write_text(changed)
+        result = self.restore(config, run)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('restoration cancelled', result.stderr)
+        self.assertEqual(config.read_text(), changed)
+        self.assertFalse(Path(str(config) + '.ntlmninja.lock').exists())
+
+    def test_restore_refuses_missing_snapshot_and_active_session(self):
+        _, config, run = self.config_call('edit_responder_conf', 'SMB = On\nHTTP = On\n')
+        changed = config.read_text()
+        self.mock('tmux', 'exit 0\n')
+        result = self.restore(config, run)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('Stop the existing session', result.stderr)
+        self.mock('tmux', 'exit 1\n')
+        (run / 'Responder.conf.updated').unlink()
+        self.assertNotEqual(self.restore(config, run).returncode, 0)
+        self.assertEqual(config.read_text(), changed)
+
+    def test_restore_is_idempotent(self):
+        original = 'SMB = On\nHTTP = On\n'
+        _, config, run = self.config_call('edit_responder_conf', original)
+        self.assertEqual(self.restore(config, run).returncode, 0)
+        result = self.restore(config, run)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn('already matches', result.stdout)
+        self.assertEqual(config.read_text(), original)
+
+    def test_concurrent_lock_and_release(self):
+        config = self.root / 'Responder.conf'
+        holder = subprocess.Popen(['bash', '-c',
+            'source "$1"; RESPONDER_CONFIG_FILE="$2"; trap finish_run EXIT; '
+            'trap "exit 143" TERM; acquire_lock; echo ready; read -r reply',
+            'test', str(SCRIPT), str(config)], env=self.env,
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            self.assertEqual(holder.stdout.readline().strip(), 'ready')
+            result = subprocess.run(['bash', '-c',
+                'source "$1"; RESPONDER_CONFIG_FILE="$2"; trap finish_run EXIT; acquire_lock',
+                'test', str(SCRIPT), str(config)], env=self.env, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('Cannot acquire lock', result.stderr)
+            self.assertTrue(Path(str(config) + '.ntlmninja.lock/pid').exists())
+        finally:
+            holder.communicate('done\n', timeout=5)
+        self.assertEqual(holder.returncode, 0)
+        self.assertFalse(Path(str(config) + '.ntlmninja.lock').exists())
+        result = subprocess.run(['bash', '-c',
+            'source "$1"; RESPONDER_CONFIG_FILE="$2"; trap finish_run EXIT; acquire_lock; exit 7',
+            'test', str(SCRIPT), str(config)], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 7)
+        self.assertFalse(Path(str(config) + '.ntlmninja.lock').exists())
 
 
 if __name__ == '__main__':
