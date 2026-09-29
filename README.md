@@ -62,4 +62,6 @@ bash -n ntlmninja.sh
 python3 tests/test_workflow.py
 ```
 
-Use only on systems you have explicit permission to assess.
+## Disclaimer
+
+This tool is for educational and authorized testing purposes only. Do not use this script on networks or systems for which you do not have explicit permission. The authors are not responsible for any misuse or damage caused by this tool. Use at your own risk. You assume full responsibility for your actions and their consequences.
