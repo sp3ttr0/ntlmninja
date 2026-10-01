@@ -222,6 +222,39 @@ exit "${SCAN_EXIT:-0}"
         self.assertIn('already matches', result.stdout)
         self.assertEqual(config.read_text(), original)
 
+    def test_side_by_side_layout_uses_returned_pane_ids(self):
+        commands = self.root / 'tmux-commands'
+        self.env['TMUX_COMMAND_LOG'] = str(commands)
+        self.mock('tmux', '''printf '%s\\n' "$*" >> "$TMUX_COMMAND_LOG"
+case "$1" in
+    new-session) printf '%%41\\n' ;;
+    split-window) printf '%%58\\n' ;;
+esac
+''')
+        result = subprocess.run(['bash', '-c',
+            'source "$1"; RUN_DIR="$2"; prepare_tmux_layout',
+            'test', str(SCRIPT), str(self.root)], env=self.env, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = commands.read_text()
+        self.assertIn('split-window -h -t %41', calls)
+        self.assertIn('select-layout -t %41 even-horizontal', calls)
+        self.assertIn('select-pane -t %41 -T Responder', calls)
+        self.assertIn('select-pane -t %58 -T ntlmrelayx', calls)
+        self.assertNotIn('send-keys', calls)
+
+    def test_split_failure_stops_layout_setup(self):
+        self.mock('tmux', '''case "$1" in
+    new-session) printf '%%41\\n' ;;
+    split-window) exit 1 ;;
+    *) echo 'unexpected later command' >&2; exit 99 ;;
+esac
+''')
+        result = subprocess.run(['bash', '-c',
+            'source "$1"; RUN_DIR="$2"; prepare_tmux_layout',
+            'test', str(SCRIPT), str(self.root)], env=self.env, capture_output=True, text=True)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('unexpected later command', result.stderr)
+
     def test_concurrent_lock_and_release(self):
         config = self.root / 'Responder.conf'
         holder = subprocess.Popen(['bash', '-c',

